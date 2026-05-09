@@ -3,6 +3,71 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 10px 26px rgba(81, 33, 20, 0.08);
+  }
+  50% {
+    box-shadow: 0 10px 26px rgba(81, 33, 20, 0.15), 0 0 20px rgba(190, 35, 22, 0.12);
+  }
+}
+
+@keyframes glowRed {
+  0%, 100% {
+    box-shadow: 0 18px 40px rgba(190, 35, 22, 0.25);
+  }
+  50% {
+    box-shadow: 0 18px 40px rgba(190, 35, 22, 0.35), 0 0 30px rgba(190, 35, 22, 0.25);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -31,6 +96,14 @@ textarea {
   background: linear-gradient(135deg, rgba(255, 250, 241, 0.88), rgba(251, 246, 236, 0.62));
   box-shadow: 0 22px 70px rgba(81, 33, 20, 0.13);
   backdrop-filter: blur(24px) saturate(1.25);
+  animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.liquid-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 90px rgba(81, 33, 20, 0.18);
+  border-color: rgba(190, 35, 22, 0.15);
 }
 
 .deal-card {
@@ -40,6 +113,13 @@ textarea {
   padding: 0.75rem;
   box-shadow: 0 16px 45px rgba(81, 33, 20, 0.10);
   backdrop-filter: blur(24px) saturate(1.2);
+  transition: all 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.deal-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 60px rgba(81, 33, 20, 0.16), 0 0 30px rgba(190, 35, 22, 0.08);
+  border-color: rgba(190, 35, 22, 0.2);
 }
 
 .glass-button,
@@ -58,7 +138,25 @@ textarea {
   color: #1c1917;
   font-weight: 800;
   box-shadow: 0 10px 26px rgba(81, 33, 20, 0.08);
-  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.glass-button::before,
+.filter-toggle::before,
+.wide-button::before,
+.coupon-button::before,
+.icon-button::before,
+.pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.4) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
 }
 
 .glass-button:hover,
@@ -67,8 +165,19 @@ textarea {
 .coupon-button:hover,
 .icon-button:hover,
 .pill:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 34px rgba(81, 33, 20, 0.13);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 16px 42px rgba(81, 33, 20, 0.16), 0 0 20px rgba(190, 35, 22, 0.1);
+  border-color: rgba(190, 35, 22, 0.3);
+}
+
+.glass-button:active,
+.filter-toggle:active,
+.wide-button:active,
+.coupon-button:active,
+.icon-button:active,
+.pill:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 8px 18px rgba(81, 33, 20, 0.1);
 }
 
 .glass-button {
@@ -85,6 +194,30 @@ textarea {
   background: #be2316;
   color: white;
   box-shadow: 0 18px 40px rgba(190, 35, 22, 0.25);
+  transition: all 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.primary-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3), transparent 70%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.primary-icon:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 26px 60px rgba(190, 35, 22, 0.35), 0 0 40px rgba(190, 35, 22, 0.3);
+}
+
+.primary-icon:active {
+  transform: translateY(-1px) scale(0.97);
+  box-shadow: 0 12px 30px rgba(190, 35, 22, 0.2);
 }
 
 .pill {
@@ -98,6 +231,8 @@ textarea {
 .filter-toggle.is-on {
   background: #be2316;
   color: white;
+  box-shadow: 0 12px 35px rgba(190, 35, 22, 0.28), 0 0 25px rgba(190, 35, 22, 0.2);
+  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .filter-toggle {
@@ -108,13 +243,27 @@ textarea {
 .wide-button {
   min-height: 3.35rem;
   width: 100%;
-  background: #be2316;
+  background: linear-gradient(135deg, #be2316 0%, #a01c0f 100%);
   color: white;
+  box-shadow: 0 16px 40px rgba(190, 35, 22, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wide-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 24px 52px rgba(190, 35, 22, 0.35), 0 0 30px rgba(190, 35, 22, 0.2);
+  background: linear-gradient(135deg, #d4291c 0%, #be2316 100%);
+}
+
+.wide-button:active {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(190, 35, 22, 0.2);
 }
 
 .wide-button.small {
   min-height: 2.75rem;
-  background: rgba(139, 28, 19, 0.94);
+  background: linear-gradient(135deg, rgba(139, 28, 19, 0.94) 0%, rgba(125, 24, 15, 0.94) 100%);
   font-size: 0.9rem;
 }
 
@@ -144,11 +293,20 @@ textarea {
   font-size: 0.75rem;
   font-weight: 900;
   backdrop-filter: blur(14px);
+  animation: slideUp 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  transition: all 240ms ease;
+}
+
+.chip:hover,
+.chip-dark:hover {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 8px 24px rgba(81, 33, 20, 0.15);
 }
 
 .chip-dark {
-  background: rgba(190, 35, 22, 0.90);
+  background: linear-gradient(135deg, rgba(190, 35, 22, 0.90) 0%, rgba(170, 28, 18, 0.90) 100%);
   color: white;
+  box-shadow: 0 6px 20px rgba(190, 35, 22, 0.2);
 }
 
 .field {
@@ -169,20 +327,22 @@ textarea {
 .field select,
 .field textarea {
   width: 100%;
-  border: 1px solid rgba(214, 197, 171, 0.84);
+  border: 1.5px solid rgba(214, 197, 171, 0.84);
   border-radius: 1.1rem;
   background: rgba(255, 250, 241, 0.80);
   padding: 0.9rem 1rem;
   color: #1c1917;
   outline: none;
-  transition: border 160ms ease, box-shadow 160ms ease;
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   border-color: #be2316;
-  box-shadow: 0 0 0 4px rgba(190, 35, 22, 0.14);
+  background: rgba(255, 252, 248, 0.95);
+  box-shadow: 0 0 0 6px rgba(190, 35, 22, 0.12), inset 0 2px 8px rgba(190, 35, 22, 0.05);
+  transform: scale(1.01);
 }
 
 .field-error input,
@@ -190,13 +350,14 @@ textarea {
 .field-error textarea {
   border-color: #dc2626;
   background: rgba(255, 241, 242, 0.84);
-  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.12);
 }
 
 .field small {
   color: #b91c1c;
   font-size: 0.78rem;
   font-weight: 800;
+  animation: slideUp 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .bottom-tab {
@@ -207,13 +368,31 @@ textarea {
   color: #78716c;
   font-size: 0.7rem;
   font-weight: 900;
-  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+  transition: all 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.bottom-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.bottom-tab:hover {
+  background: rgba(190, 35, 22, 0.15);
+  transform: translateY(-3px);
 }
 
 .bottom-tab.active {
-  background: #be2316;
+  background: linear-gradient(135deg, #be2316 0%, #a01c0f 100%);
   color: white;
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(190, 35, 22, 0.3), 0 0 20px rgba(190, 35, 22, 0.2);
 }
 
 .mini-row,
@@ -226,6 +405,15 @@ textarea {
   background: rgba(255, 250, 241, 0.74);
   padding: 0.75rem;
   box-shadow: 0 10px 25px rgba(81, 33, 20, 0.08);
+  transition: all 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideUp 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.mini-row:hover,
+.admin-row:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(81, 33, 20, 0.14), 0 0 20px rgba(190, 35, 22, 0.1);
+  border-color: rgba(190, 35, 22, 0.2);
 }
 
 .admin-row {
@@ -237,12 +425,20 @@ textarea {
   border-radius: 1rem;
   font-weight: 900;
   color: #64748b;
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.seg:hover {
+  background: rgba(190, 35, 22, 0.1);
+  transform: scale(1.02);
 }
 
 .seg.active {
   background: #fffaf1;
   color: #1c1917;
-  box-shadow: 0 8px 20px rgba(81, 33, 20, 0.08);
+  box-shadow: 0 8px 20px rgba(81, 33, 20, 0.12);
+  transform: scale(1.02);
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -258,4 +454,55 @@ textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Modern loading state */
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.wide-button:disabled {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* Smooth scale animation for interactive elements */
+@supports (animation-timeline: view()) {
+  .deal-card {
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+
+/* Link hover effects */
+a {
+  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+a:hover {
+  transform: translateY(-1px);
+}
+
+/* Smooth transitions for all text */
+h1, h2, h3, p, span {
+  transition: color 240ms ease;
+}
+
+/* Enhanced select dropdown */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23be2316' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1.25rem;
+  padding-right: 2.5rem;
+}
+
+/* Focus visible for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #be2316;
+  outline-offset: 2px;
 }

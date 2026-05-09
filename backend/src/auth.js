@@ -27,7 +27,7 @@ async function getUserById(id) {
   const rows = await query(
     `SELECT u.id, u.name, u.email, u.role, u.status,
             s.shop_name, s.owner_phone, s.address, s.city, s.area, s.latitude, s.longitude, s.google_maps_url,
-            s.logo_url, s.cover_url, s.timings, s.monthly_limit
+            s.logo_url, s.cover_url, s.monthly_limit
        FROM users u
        LEFT JOIN shop_profiles s ON s.user_id = u.id
       WHERE u.id = ?`,
@@ -47,7 +47,6 @@ async function getUserById(id) {
         googleMapsUrl: user.google_maps_url,
         logoUrl: user.logo_url,
         coverUrl: user.cover_url,
-        timings: user.timings,
         monthlyLimit: user.monthly_limit
       }
     : null;

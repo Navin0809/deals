@@ -41,12 +41,14 @@ const dealSchema = z.object({
   isBest: z.coerce.boolean().default(false),
   dealExpiresAt: optionalText(z.coerce.date()),
   couponExpiresAt: optionalText(z.coerce.date()),
-  shopTimings: z.string().max(180).optional().or(z.literal('')),
   latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
   longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
   googleMapsUrl: z.string().url().optional().or(z.literal('')),
   terms: z.string().max(1200).optional().or(z.literal('')),
-  imageUrls: z.array(z.string().url()).max(5).optional()
+  imageUrls: z.preprocess(
+    (value) => (Array.isArray(value) ? value.filter(url => url) : []),
+    z.array(z.string().url()).max(5).optional()
+  )
 });
 
 const categorySchema = z.object({
@@ -63,8 +65,7 @@ const shopProfileSchema = z.object({
   ownerPhone: z.string().min(7).max(40),
   address: z.string().min(5).max(255),
   area: z.string().min(2).max(100),
-  googleMapsUrl: optionalText(z.string().url()),
-  timings: optionalText(z.string().max(180))
+  googleMapsUrl: optionalText(z.string().url())
 });
 
 function validate(schema) {

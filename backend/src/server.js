@@ -90,8 +90,9 @@ app.post('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, limit: 20 }
       const location = resolveShopLocation({ area: data.area, googleMapsUrl: data.googleMapsUrl });
       await conn.execute(
         `INSERT INTO shop_profiles
-         (user_id, shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, timings)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (user_id, shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+
         [
           result.insertId,
           data.shopName,
@@ -101,8 +102,7 @@ app.post('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, limit: 20 }
           data.area,
           location.latitude,
           location.longitude,
-          data.googleMapsUrl || null,
-          null
+          data.googleMapsUrl || null
         ]
       );
     }
@@ -298,7 +298,7 @@ app.get('/api/owner/deals', requireRole('shop_owner'), asyncHandler(async (req, 
         AND MONTH(created_at) = MONTH(CURRENT_DATE())`,
     [req.user.id]
   );
-  const [shop] = await query('SELECT shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, timings, monthly_limit FROM shop_profiles WHERE user_id = ?', [req.user.id]);
+  const [shop] = await query('SELECT shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, monthly_limit FROM shop_profiles WHERE user_id = ?', [req.user.id]);
   res.json({ deals, shop, postedThisMonth, monthlyLimit: shop?.monthly_limit ?? monthlyDealLimit });
 }));
 
@@ -308,7 +308,7 @@ app.patch('/api/owner/shop', requireRole('shop_owner'), validate(shopProfileSche
   await query(
     `UPDATE shop_profiles
         SET shop_name = ?, owner_phone = ?, address = ?, city = 'Hyderabad', area = ?,
-            latitude = ?, longitude = ?, google_maps_url = ?, timings = ?
+            latitude = ?, longitude = ?, google_maps_url = ?
       WHERE user_id = ?`,
     [
       data.shopName,
@@ -318,7 +318,6 @@ app.patch('/api/owner/shop', requireRole('shop_owner'), validate(shopProfileSche
       location.latitude,
       location.longitude,
       data.googleMapsUrl || null,
-      data.timings || null,
       req.user.id
     ]
   );
@@ -349,8 +348,8 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
   const result = await query(
     `INSERT INTO deals
      (shop_owner_id, category_id, title, description, coupon_code, discount_label, regular_price, deal_price, is_best,
-      deal_expires_at, coupon_expires_at, shop_timings, latitude, longitude, google_maps_url, terms, image_url, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      deal_expires_at, coupon_expires_at, latitude, longitude, google_maps_url, terms, image_url, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       req.user.id,
       data.categoryId,
@@ -363,7 +362,6 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
       data.isBest,
       toMysqlDate(expiresAt),
       toMysqlDate(data.couponExpiresAt || expiresAt),
-      data.shopTimings || null,
       dealLocation.latitude,
       dealLocation.longitude,
       data.googleMapsUrl || shop.google_maps_url || null,
@@ -399,7 +397,7 @@ app.put('/api/owner/deals/:id', requireRole('shop_owner'), validate(dealSchema),
     `UPDATE deals
         SET category_id = ?, title = ?, description = ?, coupon_code = ?, discount_label = ?,
             regular_price = ?, deal_price = ?, is_best = ?, deal_expires_at = ?,
-            coupon_expires_at = ?, shop_timings = ?, latitude = ?, longitude = ?,
+            coupon_expires_at = ?, latitude = ?, longitude = ?,
             google_maps_url = ?, terms = ?, image_url = ?, status = 'active'
       WHERE id = ? AND shop_owner_id = ?`,
     [
@@ -413,7 +411,6 @@ app.put('/api/owner/deals/:id', requireRole('shop_owner'), validate(dealSchema),
       data.isBest,
       toMysqlDate(expiresAt),
       toMysqlDate(data.couponExpiresAt || expiresAt),
-      data.shopTimings || null,
       dealLocation.latitude,
       dealLocation.longitude,
       data.googleMapsUrl || shop.google_maps_url || null,

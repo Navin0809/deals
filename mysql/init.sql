@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS shop_profiles (
   google_maps_url TEXT,
   logo_url TEXT,
   cover_url TEXT,
-  timings VARCHAR(180),
   monthly_limit INT NOT NULL DEFAULT 3,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_shop_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -53,7 +52,6 @@ CREATE TABLE IF NOT EXISTS deals (
   popularity_score INT NOT NULL DEFAULT 0,
   deal_expires_at DATETIME NOT NULL,
   coupon_expires_at DATETIME NOT NULL,
-  shop_timings VARCHAR(180),
   latitude DECIMAL(10, 7),
   longitude DECIMAL(10, 7),
   google_maps_url TEXT,
@@ -116,20 +114,9 @@ VALUES
   (2, 'Aria Local', 'owner@deals.local', '$2a$12$DUWse57hCp0hZrmF7GguEuNjY/w9.r6lAhVi7iH53C018dOaT5Av.', 'shop_owner', 'active', TRUE);
 
 INSERT IGNORE INTO shop_profiles
-  (user_id, shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, logo_url, cover_url, timings, monthly_limit)
+  (user_id, shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, logo_url, cover_url, monthly_limit)
 VALUES
   (2, 'Aria Market Studio', '+91 90000 01010', 'Road 36, Jubilee Hills', 'Hyderabad', 'Jubilee Hills', 17.4326000, 78.4071000,
-   'https://www.google.com/maps?q=17.4326,78.4071', NULL, NULL, '10:00 AM - 9:00 PM', 3);
+   'https://www.google.com/maps?q=17.4326,78.4071', NULL, NULL, 3);
 
-INSERT IGNORE INTO deals
-  (id, shop_owner_id, category_id, title, description, coupon_code, discount_label, regular_price, deal_price, is_best,
-   popularity_score, deal_expires_at, coupon_expires_at, shop_timings, latitude, longitude, google_maps_url, terms, image_url, status)
-VALUES
-  (1, 2, 1, 'Weekend brunch combo', 'Fresh sandwich, cold brew, and pastry bundle available for walk-in customers this weekend.', 'BRUNCH25',
-   '25% off', 18.00, 13.50, TRUE, 42, DATE_ADD(NOW(), INTERVAL 7 DAY), DATE_ADD(NOW(), INTERVAL 7 DAY),
-   '10:00 AM - 2:00 PM', 17.4326000, 78.4071000, 'https://www.google.com/maps?q=17.4326,78.4071',
-   'Valid once per customer. Show coupon at billing counter.', 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=900&q=80', 'active'),
-  (2, 2, 4, 'Local grocery basket', 'Save on a curated basket of daily essentials including fruit, bread, milk, and snacks.', 'BASKET15',
-   '$15 saved', 65.00, 50.00, FALSE, 21, DATE_ADD(NOW(), INTERVAL 4 DAY), DATE_ADD(NOW(), INTERVAL 4 DAY),
-   '9:00 AM - 8:00 PM', 17.4326000, 78.4071000, 'https://www.google.com/maps?q=17.4326,78.4071',
-   'Subject to stock availability.', 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80', 'active');
+

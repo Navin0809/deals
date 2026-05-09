@@ -173,7 +173,13 @@ function Discover() {
               All active ads are shown by default. Select a Hyderabad area or use GPS to sort nearby offers.
             </p>
           </div>
-          <motion.button whileTap={{ scale: 0.96 }} onClick={requestLocation} className="primary-icon" title="Use current location">
+          <motion.button 
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            whileTap={{ scale: 0.92 }} 
+            onClick={requestLocation} 
+            className="primary-icon" 
+            title="Use current location"
+          >
             <LocateFixed />
           </motion.button>
         </div>
@@ -239,7 +245,14 @@ function DealCard({ deal, index }) {
     onError: (error) => alert(`Failed to redeem: ${error.response?.data?.message || 'Unknown error'}`)
   });
   return (
-    <motion.article layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.035 }} className="deal-card">
+    <motion.article 
+      layout 
+      initial={{ opacity: 0, y: 30, scale: 0.95 }} 
+      animate={{ opacity: 1, y: 0, scale: 1 }} 
+      transition={{ delay: index * 0.04, type: 'spring', stiffness: 100, damping: 15 }}
+      whileHover={{ y: -8 }}
+      className="deal-card"
+    >
       <div className="relative aspect-[1.35] overflow-hidden rounded-[1.35rem]">
         <img src={images[currentImageIndex]} alt="" loading="lazy" className="h-full w-full object-cover transition-opacity duration-500" />
         {images.length > 1 && (
@@ -266,19 +279,40 @@ function DealCard({ deal, index }) {
           <MapPin size={16} /> {deal.shop_name} · {deal.distance_miles ? `${Number(deal.distance_miles).toFixed(1)} mi` : deal.area || deal.city}
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <button onClick={() => navigator.clipboard?.writeText(deal.coupon_code)} className="coupon-button">
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigator.clipboard?.writeText(deal.coupon_code)} 
+            className="coupon-button"
+          >
             <Copy size={16} /> {deal.coupon_code}
-          </button>
-          <a href={mapsUrl} target="_blank" rel="noreferrer" className="icon-button" aria-label="Navigate">
+          </motion.button>
+          <motion.a 
+            href={mapsUrl} 
+            target="_blank" 
+            rel="noreferrer" 
+            className="icon-button" 
+            aria-label="Navigate"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+          >
             <Navigation size={18} />
-          </a>
+          </motion.a>
         </div>
         {user ? (
-          <button onClick={() => redeem.mutate()} disabled={redeem.isLoading} className="wide-button small">
+          <motion.button 
+            onClick={() => redeem.mutate()} 
+            disabled={redeem.isLoading} 
+            className="wide-button small"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
             {redeem.isLoading ? 'Redeeming...' : 'Mark as redeemed'}
-          </button>
+          </motion.button>
         ) : (
-          <Link to="/auth" className="wide-button small">Sign in to redeem</Link>
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <Link to="/auth" className="wide-button small">Sign in to redeem</Link>
+          </motion.div>
         )}
       </div>
     </motion.article>
@@ -302,17 +336,35 @@ function MapView() {
         <iframe title="Nearby deals map" src={mapSrc} loading="lazy" className="h-[58vh] w-full rounded-[1.35rem] border-0" />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        {deals.slice(0, 6).map((deal) => (
-          <button key={deal.id} onClick={() => setSelectedId(deal.id)} className="mini-row text-left">
+        {deals.slice(0, 6).map((deal, index) => (
+          <motion.button 
+            key={deal.id} 
+            onClick={() => setSelectedId(deal.id)} 
+            className="mini-row text-left"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+            whileHover={{ scale: 1.02, x: 4 }}
+            whileTap={{ scale: 0.98 }}
+          >
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#be2316] text-white"><MapPin size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
               <span className="block truncate text-sm text-slate-500">{deal.shop_name} · {deal.area || deal.city}</span>
             </span>
-            <a href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Open navigation" onClick={(event) => event.stopPropagation()}>
+            <motion.a 
+              href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} 
+              target="_blank" 
+              rel="noreferrer" 
+              className="icon-button" 
+              aria-label="Open navigation" 
+              onClick={(event) => event.stopPropagation()}
+              whileHover={{ scale: 1.15 }}
+              whileTap={{ scale: 0.9 }}
+            >
               <Navigation size={17} />
-            </a>
-          </button>
+            </motion.a>
+          </motion.button>
         ))}
       </div>
     </section>
@@ -345,10 +397,9 @@ function OwnerStudio() {
       ownerPhone: shop.owner_phone || '',
       address: shop.address || '',
       area: shop.area || '',
-      googleMapsUrl: shop.google_maps_url || '',
-      timings: shop.timings || ''
+      googleMapsUrl: shop.google_maps_url || ''
     });
-  }, [shop?.shop_name, shop?.owner_phone, shop?.address, shop?.area, shop?.google_maps_url, shop?.timings]);
+  }, [shop?.shop_name, shop?.owner_phone, shop?.address, shop?.area, shop?.google_maps_url]);
 
   const resetDealForm = () => {
     setForm(defaultDealForm());
@@ -445,7 +496,6 @@ function OwnerStudio() {
               <Input label="Address" value={shopForm.address} error={shopErrors.address} onChange={(address) => setShopForm({ ...shopForm, address })} />
               <Select label="Hyderabad area" value={shopForm.area} error={shopErrors.area} onChange={(area) => setShopForm({ ...shopForm, area })} options={areaOptions} />
               <Input label="Google Maps URL" value={shopForm.googleMapsUrl} error={shopErrors.googleMapsUrl} onChange={(googleMapsUrl) => setShopForm({ ...shopForm, googleMapsUrl })} />
-              <Input label="Shop timings" value={shopForm.timings} error={shopErrors.timings} onChange={(timings) => setShopForm({ ...shopForm, timings })} />
               {saveShop.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveShop.error.response?.data?.message || 'Could not save shop location.'}</p> : null}
               <button className="wide-button" disabled={saveShop.isLoading}>Save shop location</button>
             </form>
