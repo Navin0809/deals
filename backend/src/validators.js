@@ -39,7 +39,7 @@ const dealSchema = z.object({
   regularPrice: z.coerce.number().nonnegative().optional().nullable(),
   dealPrice: z.coerce.number().nonnegative().optional().nullable(),
   isBest: z.coerce.boolean().default(false),
-  dealExpiresAt: z.coerce.date(),
+  dealExpiresAt: optionalText(z.coerce.date()),
   couponExpiresAt: optionalText(z.coerce.date()),
   shopTimings: z.string().max(180).optional().or(z.literal('')),
   latitude: z.coerce.number().min(-90).max(90).optional().nullable(),

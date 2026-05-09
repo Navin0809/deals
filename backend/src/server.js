@@ -185,7 +185,7 @@ app.post('/api/uploads', requireAuth, upload.single('image'), (req, res) => {
 
 app.get('/api/deals', asyncHandler(async (req, res) => {
   const { categoryId, city, area, lat, lng, best, sort = 'latest', page = 1, limit = 12 } = req.query;
-  const conditions = ['d.status = "active"', 'd.deal_expires_at > NOW()', '(d.coupon_expires_at IS NULL OR d.coupon_expires_at > NOW())', 'u.status = "active"'];
+  const conditions = ['d.status = "active"', 'u.status = "active"'];
   const params = [];
   const pageSize = Math.min(Number(limit) || 12, 30);
   const offset = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
@@ -309,6 +309,7 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
   }
 
   const data = req.body;
+  const expiresAt = data.dealExpiresAt || defaultDealExpiry();
   const [shop] = await query('SELECT latitude, longitude, google_maps_url FROM shop_profiles WHERE user_id = ?', [req.user.id]);
   const dealLocation = parseCoordinatesFromMapsUrl(data.googleMapsUrl) || {
     latitude: data.latitude ?? shop.latitude,
@@ -329,8 +330,8 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
       data.regularPrice ?? null,
       data.dealPrice ?? null,
       data.isBest,
-      toMysqlDate(data.dealExpiresAt),
-      toMysqlDate(data.couponExpiresAt || data.dealExpiresAt),
+      toMysqlDate(expiresAt),
+      toMysqlDate(data.couponExpiresAt || expiresAt),
       data.shopTimings || null,
       dealLocation.latitude,
       dealLocation.longitude,
@@ -344,6 +345,7 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
 
 app.put('/api/owner/deals/:id', requireRole('shop_owner'), validate(dealSchema), asyncHandler(async (req, res) => {
   const data = req.body;
+  const expiresAt = data.dealExpiresAt || defaultDealExpiry();
   const [shop] = await query('SELECT latitude, longitude, google_maps_url FROM shop_profiles WHERE user_id = ?', [req.user.id]);
   const dealLocation = parseCoordinatesFromMapsUrl(data.googleMapsUrl) || {
     latitude: data.latitude ?? shop.latitude,
@@ -365,8 +367,8 @@ app.put('/api/owner/deals/:id', requireRole('shop_owner'), validate(dealSchema),
       data.regularPrice ?? null,
       data.dealPrice ?? null,
       data.isBest,
-      toMysqlDate(data.dealExpiresAt),
-      toMysqlDate(data.couponExpiresAt || data.dealExpiresAt),
+      toMysqlDate(expiresAt),
+      toMysqlDate(data.couponExpiresAt || expiresAt),
       data.shopTimings || null,
       dealLocation.latitude,
       dealLocation.longitude,
@@ -500,6 +502,10 @@ function cookieOptions() {
 
 function toMysqlDate(date) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function defaultDealExpiry() {
+  return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 }
 
 ensureSchema()

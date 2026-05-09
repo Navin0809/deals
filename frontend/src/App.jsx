@@ -353,8 +353,6 @@ function OwnerStudio() {
       regularPrice: deal.regular_price || '',
       dealPrice: deal.deal_price || '',
       isBest: Boolean(deal.is_best),
-      dealExpiresAt: toDateTimeLocal(deal.deal_expires_at),
-      shopTimings: deal.shop_timings || '',
       googleMapsUrl: deal.google_maps_url || '',
       imageUrl: deal.image_url || ''
     });
@@ -364,6 +362,8 @@ function OwnerStudio() {
   if (!me?.user) return <Auth compact />;
   if (me.user.role !== 'shop_owner') return <EmptyState title="Shop owner access" text="Create a shop owner account to post free monthly deals." />;
   if (me.user.status !== 'active') return <PendingApproval />;
+  const dealErrors = saveDeal.error?.response?.data?.errors || {};
+  const shopErrors = saveShop.error?.response?.data?.errors || {};
 
   return (
     <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -389,12 +389,12 @@ function OwnerStudio() {
             <p className="eyebrow">Shop location</p>
             <h2 className="mt-1 text-2xl font-black">Where customers visit</h2>
             <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); saveShop.mutate(shopForm); }}>
-              <Input label="Shop name" value={shopForm.shopName} onChange={(shopName) => setShopForm({ ...shopForm, shopName })} />
-              <Input label="Phone" value={shopForm.ownerPhone} onChange={(ownerPhone) => setShopForm({ ...shopForm, ownerPhone })} />
-              <Input label="Address" value={shopForm.address} onChange={(address) => setShopForm({ ...shopForm, address })} />
-              <Select label="Hyderabad area" value={shopForm.area} onChange={(area) => setShopForm({ ...shopForm, area })} options={areaOptions} />
-              <Input label="Google Maps URL" value={shopForm.googleMapsUrl} onChange={(googleMapsUrl) => setShopForm({ ...shopForm, googleMapsUrl })} />
-              <Input label="Shop timings" value={shopForm.timings} onChange={(timings) => setShopForm({ ...shopForm, timings })} />
+              <Input label="Shop name" value={shopForm.shopName} error={shopErrors.shopName} onChange={(shopName) => setShopForm({ ...shopForm, shopName })} />
+              <Input label="Phone" value={shopForm.ownerPhone} error={shopErrors.ownerPhone} onChange={(ownerPhone) => setShopForm({ ...shopForm, ownerPhone })} />
+              <Input label="Address" value={shopForm.address} error={shopErrors.address} onChange={(address) => setShopForm({ ...shopForm, address })} />
+              <Select label="Hyderabad area" value={shopForm.area} error={shopErrors.area} onChange={(area) => setShopForm({ ...shopForm, area })} options={areaOptions} />
+              <Input label="Google Maps URL" value={shopForm.googleMapsUrl} error={shopErrors.googleMapsUrl} onChange={(googleMapsUrl) => setShopForm({ ...shopForm, googleMapsUrl })} />
+              <Input label="Shop timings" value={shopForm.timings} error={shopErrors.timings} onChange={(timings) => setShopForm({ ...shopForm, timings })} />
               {saveShop.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveShop.error.response?.data?.message || 'Could not save shop location.'}</p> : null}
               <button className="wide-button" disabled={saveShop.isLoading}>Save shop location</button>
             </form>
@@ -406,17 +406,15 @@ function OwnerStudio() {
             <p className="eyebrow">{editingId ? 'Edit ad' : 'New ad'}</p>
             <h2 className="mt-1 text-2xl font-black">{editingId ? 'Update offer' : 'Post an ad'}</h2>
             <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); saveDeal.mutate(form); }}>
-              <Input label="Deal title" value={form.title} onChange={(title) => setForm({ ...form, title })} />
-              <Textarea label="Description" value={form.description} onChange={(description) => setForm({ ...form, description })} />
+              <Input label="Deal title" value={form.title} error={dealErrors.title} onChange={(title) => setForm({ ...form, title })} />
+              <Textarea label="Description" value={form.description} error={dealErrors.description} onChange={(description) => setForm({ ...form, description })} />
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Coupon code" value={form.couponCode} onChange={(couponCode) => setForm({ ...form, couponCode })} />
-                <Input label="Discount" value={form.discountLabel} onChange={(discountLabel) => setForm({ ...form, discountLabel })} />
+                <Input label="Coupon code" value={form.couponCode} error={dealErrors.couponCode} onChange={(couponCode) => setForm({ ...form, couponCode })} />
+                <Input label="Discount" value={form.discountLabel} error={dealErrors.discountLabel} onChange={(discountLabel) => setForm({ ...form, discountLabel })} />
               </div>
-              <Select label="Category" value={form.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={[['', 'Select category'], ...(categories?.categories || []).map((c) => [c.id, c.name])]} />
-              <Input label="Deal expiry" type="datetime-local" value={form.dealExpiresAt} onChange={(dealExpiresAt) => setForm({ ...form, dealExpiresAt })} />
-              <Input label="Shop timings" value={form.shopTimings} onChange={(shopTimings) => setForm({ ...form, shopTimings })} />
-              <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
-              <Input label="Product image URL" value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+              <Select label="Category" value={form.categoryId} error={dealErrors.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={[['', 'Select category'], ...(categories?.categories || []).map((c) => [c.id, c.name])]} />
+              <Input label="Google Maps URL" value={form.googleMapsUrl} error={dealErrors.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
+              <Input label="Product image URL" value={form.imageUrl} error={dealErrors.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
               {saveDeal.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveDeal.error.response?.data?.message || 'Could not save ad.'}</p> : null}
               <div className="grid grid-cols-2 gap-2">
                 <button className="wide-button" disabled={saveDeal.isLoading}>{editingId ? 'Update ad' : 'Publish ad'}</button>
@@ -544,6 +542,7 @@ function Auth({ compact = false }) {
       }
     }
   );
+  const authErrors = authMutation.error?.response?.data?.errors || {};
   return (
     <section className={`mx-auto max-w-xl ${compact ? '' : 'pt-6'}`}>
       <div className="liquid-panel p-5">
@@ -554,19 +553,19 @@ function Auth({ compact = false }) {
           <button onClick={() => setMode('register')} className={`seg ${mode === 'register' ? 'active' : ''}`}>Register</button>
         </div>
         <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); authMutation.mutate(); }}>
-          {mode === 'register' ? <Input label="Name" value={form.name} onChange={(name) => setForm({ ...form, name })} /> : null}
-          <Input label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
-          <Input label="Password" type="password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
+          {mode === 'register' ? <Input label="Name" value={form.name} error={authErrors.name} onChange={(name) => setForm({ ...form, name })} /> : null}
+          <Input label="Email" type="email" value={form.email} error={authErrors.email} onChange={(email) => setForm({ ...form, email })} />
+          <Input label="Password" type="password" value={form.password} error={authErrors.password} onChange={(password) => setForm({ ...form, password })} />
           {mode === 'register' ? (
             <>
               <Select label="Role" value={role} onChange={setRole} options={[['user', 'User'], ['shop_owner', 'Shop owner']]} />
               {role === 'shop_owner' ? (
                 <>
-                  <Input label="Shop name" value={form.shopName} onChange={(shopName) => setForm({ ...form, shopName })} />
-                  <Input label="Phone" value={form.ownerPhone} onChange={(ownerPhone) => setForm({ ...form, ownerPhone })} />
-                  <Input label="Address" value={form.address} onChange={(address) => setForm({ ...form, address })} />
-                  <Select label="Shop area" value={form.area} onChange={(area) => setForm({ ...form, area })} options={[['', 'Select area'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])]} />
-                  <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
+                  <Input label="Shop name" value={form.shopName} error={authErrors.shopName} onChange={(shopName) => setForm({ ...form, shopName })} />
+                  <Input label="Phone" value={form.ownerPhone} error={authErrors.ownerPhone} onChange={(ownerPhone) => setForm({ ...form, ownerPhone })} />
+                  <Input label="Address" value={form.address} error={authErrors.address} onChange={(address) => setForm({ ...form, address })} />
+                  <Select label="Shop area" value={form.area} error={authErrors.area} onChange={(area) => setForm({ ...form, area })} options={[['', 'Select area'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])]} />
+                  <Input label="Google Maps URL" value={form.googleMapsUrl} error={authErrors.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
                 </>
               ) : null}
             </>
@@ -609,23 +608,27 @@ function FilterPill({ active, children, onClick }) {
   return <button onClick={onClick} className={`pill ${active ? 'active' : ''}`}>{children}</button>;
 }
 
-function Select({ label, value, onChange, options }) {
+function Select({ label, value, onChange, options, error }) {
+  const message = firstError(error);
   return (
-    <label className="field">
+    <label className={`field ${message ? 'field-error' : ''}`}>
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
       </select>
+      {message ? <small>{message}</small> : null}
     </label>
   );
 }
 
-function Input({ label, value, onChange, type = 'text' }) {
-  return <label className="field"><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function Input({ label, value, onChange, type = 'text', error }) {
+  const message = firstError(error);
+  return <label className={`field ${message ? 'field-error' : ''}`}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} />{message ? <small>{message}</small> : null}</label>;
 }
 
-function Textarea({ label, value, onChange }) {
-  return <label className="field"><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} rows="4" /></label>;
+function Textarea({ label, value, onChange, error }) {
+  const message = firstError(error);
+  return <label className={`field ${message ? 'field-error' : ''}`}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} rows="4" />{message ? <small>{message}</small> : null}</label>;
 }
 
 function EmptyState({ title, text }) {
@@ -654,7 +657,6 @@ function sumTotals(rows = []) {
 }
 
 function defaultDealForm() {
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
   return {
     title: '',
     description: '',
@@ -664,18 +666,14 @@ function defaultDealForm() {
     regularPrice: '',
     dealPrice: '',
     isBest: false,
-    dealExpiresAt: tomorrow,
-    shopTimings: '',
     googleMapsUrl: '',
     imageUrl: ''
   };
 }
 
-function toDateTimeLocal(value) {
-  if (!value) return new Date(Date.now() + 86400000).toISOString().slice(0, 16);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return new Date(Date.now() + 86400000).toISOString().slice(0, 16);
-  return date.toISOString().slice(0, 16);
+function firstError(error) {
+  if (Array.isArray(error)) return error[0];
+  return error || '';
 }
 
 export default App;

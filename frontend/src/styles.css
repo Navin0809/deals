@@ -185,6 +185,20 @@ textarea {
   box-shadow: 0 0 0 4px rgba(190, 35, 22, 0.14);
 }
 
+.field-error input,
+.field-error select,
+.field-error textarea {
+  border-color: #dc2626;
+  background: rgba(255, 241, 242, 0.84);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+}
+
+.field small {
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .bottom-tab {
   display: grid;
   min-height: 3.7rem;
