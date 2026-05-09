@@ -11,6 +11,7 @@ const multer = require('multer');
 const path = require('path');
 const { pool, query } = require('./db');
 const { authenticate, cookieName, publicUser, requireAuth, requireRole, signToken } = require('./auth');
+const { findArea, hyderabadAreas, parseCoordinatesFromMapsUrl, resolveShopLocation } = require('./areas');
 const { categorySchema, dealSchema, limitSchema, loginSchema, registerSchema, validate } = require('./validators');
 
 const app = express();
@@ -44,6 +45,16 @@ function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+async function ensureSchema() {
+  try {
+    await query('ALTER TABLE shop_profiles ADD COLUMN area VARCHAR(100) NULL AFTER city');
+  } catch (error) {
+    if (error.code !== 'ER_DUP_FIELDNAME') throw error;
+  }
+  await query("UPDATE shop_profiles SET city = 'Hyderabad' WHERE city IS NULL OR city = ''");
+  await query("UPDATE shop_profiles SET area = 'Jubilee Hills' WHERE area IS NULL OR area = ''");
+}
+
 function milesExpression(lat, lng) {
   return `(
     3959 * ACOS(
@@ -58,10 +69,12 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'deals' }));
 
 app.get('/api/me', (req, res) => res.json({ user: publicUser(req.user) }));
 
+app.get('/api/locations/areas', (_req, res) => res.json({ areas: hyderabadAreas }));
+
 app.post('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, limit: 20 }), validate(registerSchema), asyncHandler(async (req, res) => {
   const data = req.body;
   if (data.role === 'shop_owner') {
-    const required = ['shopName', 'ownerPhone', 'address', 'city', 'latitude', 'longitude'];
+    const required = ['shopName', 'ownerPhone', 'address', 'area'];
     const missing = required.filter((field) => data[field] === undefined || data[field] === '');
     if (missing.length) return res.status(400).json({ message: 'Shop owner registration needs shop and location details.' });
   }
@@ -76,11 +89,23 @@ app.post('/api/auth/register', rateLimit({ windowMs: 60 * 60 * 1000, limit: 20 }
       [data.name, data.email.toLowerCase(), hash, data.role, status]
     );
     if (data.role === 'shop_owner') {
+      const location = resolveShopLocation({ area: data.area, googleMapsUrl: data.googleMapsUrl });
       await conn.execute(
         `INSERT INTO shop_profiles
-         (user_id, shop_name, owner_phone, address, city, latitude, longitude, google_maps_url, timings)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [result.insertId, data.shopName, data.ownerPhone, data.address, data.city, data.latitude, data.longitude, data.googleMapsUrl || null, null]
+         (user_id, shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, timings)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          result.insertId,
+          data.shopName,
+          data.ownerPhone,
+          data.address,
+          'Hyderabad',
+          data.area,
+          location.latitude,
+          location.longitude,
+          data.googleMapsUrl || null,
+          null
+        ]
       );
     }
     await conn.commit();
@@ -159,7 +184,7 @@ app.post('/api/uploads', requireAuth, upload.single('image'), (req, res) => {
 });
 
 app.get('/api/deals', asyncHandler(async (req, res) => {
-  const { categoryId, city, lat, lng, radius = 15, best, sort = 'nearby', page = 1, limit = 12 } = req.query;
+  const { categoryId, city, area, lat, lng, best, sort = 'latest', page = 1, limit = 12 } = req.query;
   const conditions = ['d.status = "active"', 'd.deal_expires_at > NOW()', 'd.coupon_expires_at > NOW()', 'u.status = "active"'];
   const params = [];
   const pageSize = Math.min(Number(limit) || 12, 30);
@@ -172,6 +197,10 @@ app.get('/api/deals', asyncHandler(async (req, res) => {
     conditions.push('s.city LIKE ?');
     params.push(`%${city}%`);
   }
+  if (area) {
+    conditions.push('s.area = ?');
+    params.push(area);
+  }
   if (best === 'true') conditions.push('d.is_best = TRUE');
 
   let distanceSql = 'NULL AS distance_miles';
@@ -179,8 +208,6 @@ app.get('/api/deals', asyncHandler(async (req, res) => {
   if (lat && lng && !Number.isNaN(Number(lat)) && !Number.isNaN(Number(lng))) {
     const distance = milesExpression(lat, lng);
     distanceSql = `${distance} AS distance_miles`;
-    having = 'HAVING distance_miles <= ?';
-    params.push(Number(radius));
   }
   const orderBy = {
     latest: 'd.created_at DESC',
@@ -193,7 +220,7 @@ app.get('/api/deals', asyncHandler(async (req, res) => {
     `SELECT d.id, d.title, d.description, d.coupon_code, d.discount_label, d.regular_price, d.deal_price, d.is_best,
             d.popularity_score, d.deal_expires_at, d.coupon_expires_at, d.shop_timings, d.terms, d.image_url, d.created_at,
             c.id AS category_id, c.name AS category_name, c.icon AS category_icon,
-            s.shop_name, s.owner_phone, s.address, s.city,
+            s.shop_name, s.owner_phone, s.address, s.city, s.area,
             COALESCE(d.latitude, s.latitude) AS latitude,
             COALESCE(d.longitude, s.longitude) AS longitude,
             COALESCE(d.google_maps_url, s.google_maps_url) AS google_maps_url,
@@ -259,6 +286,11 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
   }
 
   const data = req.body;
+  const [shop] = await query('SELECT latitude, longitude, google_maps_url FROM shop_profiles WHERE user_id = ?', [req.user.id]);
+  const dealLocation = parseCoordinatesFromMapsUrl(data.googleMapsUrl) || {
+    latitude: data.latitude ?? shop.latitude,
+    longitude: data.longitude ?? shop.longitude
+  };
   const result = await query(
     `INSERT INTO deals
      (shop_owner_id, category_id, title, description, coupon_code, discount_label, regular_price, deal_price, is_best,
@@ -277,9 +309,9 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
       toMysqlDate(data.dealExpiresAt),
       toMysqlDate(data.couponExpiresAt),
       data.shopTimings || null,
-      data.latitude ?? null,
-      data.longitude ?? null,
-      data.googleMapsUrl || null,
+      dealLocation.latitude,
+      dealLocation.longitude,
+      data.googleMapsUrl || shop.google_maps_url || null,
       data.terms || null,
       data.imageUrl || null
     ]
@@ -324,7 +356,7 @@ app.patch('/api/admin/users/:id/status', requireRole('admin'), asyncHandler(asyn
 app.get('/api/admin/shop-owners', requireRole('admin'), asyncHandler(async (_req, res) => {
   const rows = await query(
     `SELECT u.id, u.name, u.email, u.status, u.created_at,
-            s.shop_name, s.owner_phone, s.address, s.city, s.latitude, s.longitude, s.google_maps_url, s.monthly_limit,
+            s.shop_name, s.owner_phone, s.address, s.city, s.area, s.latitude, s.longitude, s.google_maps_url, s.monthly_limit,
             COUNT(d.id) AS deal_count
        FROM users u
        LEFT JOIN shop_profiles s ON s.user_id = u.id
@@ -402,6 +434,13 @@ function toMysqlDate(date) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-app.listen(port, () => {
-  console.log(`deals API running on port ${port}`);
-});
+ensureSchema()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`deals API running on port ${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to prepare database schema', error);
+    process.exit(1);
+  });

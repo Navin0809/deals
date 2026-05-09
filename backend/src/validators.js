@@ -19,6 +19,7 @@ const registerSchema = z.object({
   ownerPhone: optionalText(z.string().min(7).max(40)),
   address: optionalText(z.string().min(5).max(255)),
   city: optionalText(z.string().min(2).max(100)),
+  area: optionalText(z.string().min(2).max(100)),
   latitude: optionalNumber.pipe(z.number().min(-90).max(90).optional()),
   longitude: optionalNumber.pipe(z.number().min(-180).max(180).optional()),
   googleMapsUrl: optionalText(z.string().url())

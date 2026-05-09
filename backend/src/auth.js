@@ -26,7 +26,7 @@ function publicUser(user) {
 async function getUserById(id) {
   const rows = await query(
     `SELECT u.id, u.name, u.email, u.role, u.status,
-            s.shop_name, s.owner_phone, s.address, s.city, s.latitude, s.longitude, s.google_maps_url,
+            s.shop_name, s.owner_phone, s.address, s.city, s.area, s.latitude, s.longitude, s.google_maps_url,
             s.logo_url, s.cover_url, s.timings, s.monthly_limit
        FROM users u
        LEFT JOIN shop_profiles s ON s.user_id = u.id
@@ -41,6 +41,7 @@ async function getUserById(id) {
         ownerPhone: user.owner_phone,
         address: user.address,
         city: user.city,
+        area: user.area,
         latitude: user.latitude,
         longitude: user.longitude,
         googleMapsUrl: user.google_maps_url,

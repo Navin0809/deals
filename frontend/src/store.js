@@ -4,9 +4,9 @@ export const useUiStore = create((set) => ({
   location: null,
   locationStatus: 'idle',
   filters: {
-    radius: 15,
+    area: '',
     categoryId: '',
-    sort: 'nearby',
+    sort: 'latest',
     best: false
   },
   setLocation: (location) => set({ location, locationStatus: 'granted' }),

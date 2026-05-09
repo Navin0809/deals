@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+﻿import { AnimatePresence, motion } from 'framer-motion';
 import {
   BadgeCheck,
   Ban,
@@ -125,6 +125,7 @@ function Discover() {
   const queryClient = useQueryClient();
   const { filters, location, locationStatus, setFilter, setLocation, setLocationStatus } = useUiStore();
   const { data: categoriesData } = useQuery('categories', async () => (await api.get('/categories')).data);
+  const { data: areasData } = useQuery('areas', async () => (await api.get('/locations/areas')).data);
   const filtersWithLocation = useMemo(
     () => ({
       ...filters,
@@ -140,10 +141,15 @@ function Discover() {
   const deals = dealsQuery.data?.pages.flatMap((page) => page.deals) || [];
 
   const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unsupported');
+      return;
+    }
     setLocationStatus('loading');
-    navigator.geolocation?.getCurrentPosition(
+    navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setFilter('sort', 'nearby');
         queryClient.invalidateQueries('deals');
       },
       () => setLocationStatus('denied'),
@@ -159,18 +165,20 @@ function Discover() {
             <p className="eyebrow">Live nearby</p>
             <h1 className="mt-1 text-4xl font-black tracking-tight md:text-6xl">Find offers around you.</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 md:text-base">
-              Discover in-store coupons, copy the code, visit the shop, and redeem at the counter.
+              All active ads are shown by default. Select a Hyderabad area or use GPS to sort nearby offers.
             </p>
           </div>
-          <motion.button whileTap={{ scale: 0.96 }} onClick={requestLocation} className="primary-icon">
+          <motion.button whileTap={{ scale: 0.96 }} onClick={requestLocation} className="primary-icon" title="Use current location">
             <LocateFixed />
           </motion.button>
         </div>
         <div className="mt-5 grid grid-cols-3 gap-2">
-          <Metric label="GPS" value={locationStatus === 'granted' ? 'On' : locationStatus === 'loading' ? '...' : 'Ask'} />
-          <Metric label="Radius" value={`${filters.radius} mi`} />
+          <Metric label="GPS" value={locationStatus === 'granted' ? 'On' : locationStatus === 'loading' ? '...' : locationStatus === 'denied' ? 'Blocked' : 'Ask'} />
+          <Metric label="Area" value={filters.area || 'All'} />
           <Metric label="Deals" value={deals.length || '--'} />
         </div>
+        {locationStatus === 'denied' ? <p className="mt-3 text-sm font-semibold text-[#b91f12]">Location permission is blocked. You can still search by Hyderabad area.</p> : null}
+        {locationStatus === 'unsupported' ? <p className="mt-3 text-sm font-semibold text-[#b91f12]">This browser does not support GPS location.</p> : null}
       </div>
 
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
@@ -183,8 +191,8 @@ function Discover() {
       </div>
 
       <div className="liquid-panel grid grid-cols-2 gap-3 p-3 md:grid-cols-4">
-        <Select label="Distance" value={filters.radius} onChange={(value) => setFilter('radius', value)} options={[5, 10, 15, 25, 50].map((x) => [`${x}`, `${x} miles`])} />
-        <Select label="Sort" value={filters.sort} onChange={(value) => setFilter('sort', value)} options={[['nearby', 'Nearby'], ['popular', 'Popularity'], ['expiring', 'Expiring'], ['latest', 'Latest']]} />
+        <Select label="Hyderabad area" value={filters.area} onChange={(value) => setFilter('area', value)} options={[['', 'All areas'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])]} />
+        <Select label="Sort" value={filters.sort} onChange={(value) => setFilter('sort', value)} options={[['latest', 'Latest'], ['popular', 'Popularity'], ['expiring', 'Expiring'], ['nearby', 'Nearby']]} />
         <button onClick={() => setFilter('best', !filters.best)} className={`filter-toggle ${filters.best ? 'is-on' : ''}`}>
           <Sparkles size={17} /> Best offers
         </button>
@@ -195,7 +203,7 @@ function Discover() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {deals.map((deal, index) => <DealCard key={deal.id} deal={deal} index={index} />)}
         </div>
-      ) : <EmptyState title="No nearby deals yet" text="Try a larger radius or check another category." />}
+      ) : <EmptyState title="No deals found" text="Try all areas or another category." />}
 
       {dealsQuery.hasNextPage && (
         <button onClick={() => dealsQuery.fetchNextPage()} className="wide-button">
@@ -228,7 +236,7 @@ function DealCard({ deal, index }) {
           <span className="rounded-2xl bg-[#f4e7d2] px-3 py-2 text-sm font-black text-[#b91f12]">{deal.discount_label || priceLabel(deal)}</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500">
-          <MapPin size={16} /> {deal.shop_name} · {deal.distance_miles ? `${Number(deal.distance_miles).toFixed(1)} mi` : deal.city}
+          <MapPin size={16} /> {deal.shop_name} · {deal.distance_miles ? `${Number(deal.distance_miles).toFixed(1)} mi` : deal.area || deal.city}
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button onClick={() => navigator.clipboard?.writeText(deal.coupon_code)} className="coupon-button">
@@ -252,10 +260,11 @@ function MapView() {
     getNextPageParam: () => undefined
   });
   const deals = data?.pages.flatMap((page) => page.deals) || [];
-  const first = deals[0];
-  const mapSrc = first
-    ? `https://www.google.com/maps?q=${first.latitude},${first.longitude}&z=14&output=embed`
-    : 'https://www.google.com/maps?q=New%20York&z=12&output=embed';
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = deals.find((deal) => deal.id === selectedId) || deals[0];
+  const mapSrc = selected
+    ? `https://www.google.com/maps?q=${selected.latitude},${selected.longitude}&z=15&output=embed`
+    : 'https://www.google.com/maps?q=Hyderabad&z=12&output=embed';
   return (
     <section className="space-y-4">
       <div className="liquid-panel overflow-hidden p-3">
@@ -263,14 +272,16 @@ function MapView() {
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {deals.slice(0, 6).map((deal) => (
-          <a key={deal.id} href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} target="_blank" rel="noreferrer" className="mini-row">
+          <button key={deal.id} onClick={() => setSelectedId(deal.id)} className="mini-row text-left">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#be2316] text-white"><MapPin size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
-              <span className="block truncate text-sm text-slate-500">{deal.shop_name}</span>
+              <span className="block truncate text-sm text-slate-500">{deal.shop_name} · {deal.area || deal.city}</span>
             </span>
-            <ChevronRight size={18} />
-          </a>
+            <a href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} target="_blank" rel="noreferrer" className="icon-button" aria-label="Open navigation" onClick={(event) => event.stopPropagation()}>
+              <Navigation size={17} />
+            </a>
+          </button>
         ))}
       </div>
     </section>
@@ -417,7 +428,8 @@ function AdminPanel() {
 function Auth({ compact = false }) {
   const [mode, setMode] = useState('login');
   const [role, setRole] = useState('user');
-  const [form, setForm] = useState({ name: '', email: '', password: '', shopName: '', ownerPhone: '', address: '', city: '', latitude: '', longitude: '', googleMapsUrl: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', shopName: '', ownerPhone: '', address: '', area: '', googleMapsUrl: '' });
+  const { data: areasData } = useQuery('areas', async () => (await api.get('/locations/areas')).data);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const authMutation = useMutation(
@@ -429,8 +441,6 @@ function Auth({ compact = false }) {
       }
     }
   );
-  const useGps = () => navigator.geolocation?.getCurrentPosition((pos) => setForm({ ...form, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
-
   return (
     <section className={`mx-auto max-w-xl ${compact ? '' : 'pt-6'}`}>
       <div className="liquid-panel p-5">
@@ -452,12 +462,7 @@ function Auth({ compact = false }) {
                   <Input label="Shop name" value={form.shopName} onChange={(shopName) => setForm({ ...form, shopName })} />
                   <Input label="Phone" value={form.ownerPhone} onChange={(ownerPhone) => setForm({ ...form, ownerPhone })} />
                   <Input label="Address" value={form.address} onChange={(address) => setForm({ ...form, address })} />
-                  <Input label="City" value={form.city} onChange={(city) => setForm({ ...form, city })} />
-                  <button type="button" onClick={useGps} className="filter-toggle"><LocateFixed size={17} /> Use shop GPS</button>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input label="Latitude" value={form.latitude} onChange={(latitude) => setForm({ ...form, latitude })} />
-                    <Input label="Longitude" value={form.longitude} onChange={(longitude) => setForm({ ...form, longitude })} />
-                  </div>
+                  <Select label="Shop area" value={form.area} onChange={(area) => setForm({ ...form, area })} options={[['', 'Select area'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])]} />
                   <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
                 </>
               ) : null}
