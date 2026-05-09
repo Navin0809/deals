@@ -11,6 +11,7 @@ import {
   Home,
   LayoutDashboard,
   LocateFixed,
+  LogOut,
   Lock,
   Map,
   MapPin,
@@ -42,7 +43,7 @@ const fallbackImages = [
 
 function App() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,#e0f2fe_0,transparent_26%),radial-gradient(circle_at_90%_10%,#fce7f3_0,transparent_22%),#f8fafc] text-slate-950">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,#f4d8c2_0,transparent_28%),radial-gradient(circle_at_92%_8%,#d63a28_0,transparent_18%),#fbf6ec] text-stone-950">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
         <TopBar />
         <main className="flex-1 px-4 pb-28 pt-3 md:px-8 md:pb-10">
@@ -80,22 +81,41 @@ function AnimatedRoutes() {
 function TopBar() {
   const { data } = useQuery('me', async () => (await api.get('/me')).data);
   const user = data?.user;
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const logout = useMutation(() => api.post('/auth/logout'), {
+    onSuccess: () => {
+      queryClient.invalidateQueries('me');
+      queryClient.removeQueries('ownerDeals');
+      queryClient.removeQueries('adminAnalytics');
+      queryClient.removeQueries('adminOwners');
+      queryClient.removeQueries('adminDeals');
+      navigate('/');
+    }
+  });
   return (
-    <header className="sticky top-0 z-30 border-b border-white/60 bg-white/70 px-4 py-3 backdrop-blur-2xl md:px-8">
+    <header className="sticky top-0 z-30 border-b border-[#eadfce]/80 bg-[#fbf6ec]/76 px-4 py-3 backdrop-blur-2xl md:px-8">
       <div className="flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-[1.35rem] bg-slate-950 text-white shadow-lift">
-            <Ticket size={22} />
+          <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-[1.35rem] bg-[#fffaf1] shadow-lift ring-1 ring-[#eadfce]">
+            <img src="/logo.jpeg" alt="Deals logo" className="h-full w-full object-cover" />
           </span>
           <span>
             <span className="block text-xl font-black tracking-tight">Deals</span>
             <span className="block text-xs font-medium text-slate-500">Hyperlocal coupons</span>
           </span>
         </Link>
-        <Link to={user ? (user.role === 'admin' ? '/admin' : '/owner') : '/auth'} className="glass-button">
-          {user ? <UserRound size={18} /> : <Lock size={18} />}
-          <span className="hidden sm:inline">{user?.name || 'Sign in'}</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to={user ? (user.role === 'admin' ? '/admin' : '/owner') : '/auth'} className="glass-button">
+            {user ? <UserRound size={18} /> : <Lock size={18} />}
+            <span className="hidden sm:inline">{user?.name || 'Sign in'}</span>
+          </Link>
+          {user ? (
+            <button onClick={() => logout.mutate()} className="icon-button" aria-label="Sign out" title="Sign out">
+              <LogOut size={18} />
+            </button>
+          ) : null}
+        </div>
       </div>
     </header>
   );
@@ -205,7 +225,7 @@ function DealCard({ deal, index }) {
             <h2 className="text-lg font-black leading-tight">{deal.title}</h2>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{deal.description}</p>
           </div>
-          <span className="rounded-2xl bg-cyan-100 px-3 py-2 text-sm font-black text-cyan-900">{deal.discount_label || priceLabel(deal)}</span>
+          <span className="rounded-2xl bg-[#f4e7d2] px-3 py-2 text-sm font-black text-[#b91f12]">{deal.discount_label || priceLabel(deal)}</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <MapPin size={16} /> {deal.shop_name} · {deal.distance_miles ? `${Number(deal.distance_miles).toFixed(1)} mi` : deal.city}
@@ -244,7 +264,7 @@ function MapView() {
       <div className="grid gap-3 md:grid-cols-2">
         {deals.slice(0, 6).map((deal) => (
           <a key={deal.id} href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} target="_blank" rel="noreferrer" className="mini-row">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-950 text-white"><MapPin size={18} /></span>
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#be2316] text-white"><MapPin size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
               <span className="block truncate text-sm text-slate-500">{deal.shop_name}</span>
@@ -273,7 +293,7 @@ function OwnerStudio() {
 
   if (!me?.user) return <Auth compact />;
   if (me.user.role !== 'shop_owner') return <EmptyState title="Shop owner access" text="Create a shop owner account to post free monthly deals." />;
-  if (me.user.status !== 'active') return <EmptyState title="Approval pending" text="Admin approval is required before your offers go live." />;
+  if (me.user.status !== 'active') return <PendingApproval />;
 
   return (
     <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -303,7 +323,7 @@ function OwnerStudio() {
       <div className="space-y-3">
         {(ownerDeals.data?.deals || []).map((deal) => (
           <div key={deal.id} className="mini-row">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-100 text-cyan-900"><ShoppingBag size={18} /></span>
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f4e7d2] text-[#b91f12]"><ShoppingBag size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
               <span className="text-sm text-slate-500">{deal.status} · {deal.category_name}</span>
@@ -313,6 +333,30 @@ function OwnerStudio() {
         ))}
       </div>
     </section>
+  );
+}
+
+function PendingApproval() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const logout = useMutation(() => api.post('/auth/logout'), {
+    onSuccess: () => {
+      queryClient.invalidateQueries('me');
+      navigate('/auth');
+    }
+  });
+
+  return (
+    <div className="liquid-panel grid min-h-64 place-items-center p-8 text-center">
+      <div>
+        <Store className="mx-auto mb-3" />
+        <h2 className="text-2xl font-black">Approval pending</h2>
+        <p className="mt-2 text-sm text-slate-500">Admin approval is required before your offers go live.</p>
+        <button onClick={() => logout.mutate()} className="wide-button mt-5">
+          <LogOut size={18} /> Sign out
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -437,7 +481,7 @@ function BottomNav() {
   ];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl px-4 pb-4 md:hidden">
-      <div className="grid grid-cols-4 gap-1 rounded-[1.65rem] border border-white/70 bg-white/75 p-2 shadow-glass backdrop-blur-2xl">
+      <div className="grid grid-cols-4 gap-1 rounded-[1.65rem] border border-[#eadfce]/80 bg-[#fffaf1]/78 p-2 shadow-glass backdrop-blur-2xl">
         {links.map(([to, Icon, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `bottom-tab ${isActive ? 'active' : ''}`}>
             <Icon size={20} />
@@ -450,7 +494,7 @@ function BottomNav() {
 }
 
 function Metric({ label, value }) {
-  return <div className="rounded-[1.15rem] bg-white/70 p-3"><p className="text-xs font-bold uppercase text-slate-400">{label}</p><p className="mt-1 text-xl font-black">{value}</p></div>;
+  return <div className="rounded-[1.15rem] bg-[#fffaf1]/72 p-3"><p className="text-xs font-bold uppercase text-stone-400">{label}</p><p className="mt-1 text-xl font-black">{value}</p></div>;
 }
 
 function FilterPill({ active, children, onClick }) {
@@ -481,7 +525,7 @@ function EmptyState({ title, text }) {
 }
 
 function SkeletonGrid() {
-  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-96 animate-pulse rounded-[1.8rem] bg-white/70" />)}</div>;
+  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-96 animate-pulse rounded-[1.8rem] bg-[#fffaf1]/70" />)}</div>;
 }
 
 function AdminMetric({ icon: Icon, label, value }) {
