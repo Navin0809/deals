@@ -34,8 +34,24 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 250, standardHeaders: true, legacyHeaders: false }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+const frontendOrigin = process.env.FRONTEND_ORIGIN;
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:8080',
+  origin: frontendOrigin
+    ? (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (origin === frontendOrigin) return callback(null, true);
+        try {
+          const allowedUrl = new URL(frontendOrigin);
+          const requestUrl = new URL(origin);
+          if (allowedUrl.hostname === 'localhost' && requestUrl.port === allowedUrl.port) {
+            return callback(null, true);
+          }
+        } catch (_error) {
+          // ignore invalid origin parsing
+        }
+        callback(new Error('CORS policy does not allow access from the specified Origin.'));
+      }
+    : true,
   credentials: true
 }));
 app.use('/uploads', express.static(uploadDir));
