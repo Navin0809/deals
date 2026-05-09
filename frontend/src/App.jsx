@@ -28,7 +28,7 @@ import {
   Trash2,
   UserRound
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from 'react-query';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api, fetchDeals, normalizeImage } from './api';
@@ -44,13 +44,13 @@ const fallbackImages = [
 function App() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,#f4d8c2_0,transparent_28%),radial-gradient(circle_at_92%_8%,#d63a28_0,transparent_18%),#fbf6ec] text-stone-950">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
-        <TopBar />
-        <main className="flex-1 px-4 pb-28 pt-3 md:px-8 md:pb-10">
+      <TopBar />
+      <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-3 md:px-8 md:pb-10">
+        <div className="flex min-h-screen flex-col">
           <AnimatedRoutes />
-        </main>
-        <BottomNav />
-      </div>
+        </div>
+      </main>
+      <BottomNav />
     </div>
   );
 }
@@ -94,8 +94,8 @@ function TopBar() {
     }
   });
   return (
-    <header className="sticky top-0 z-30 border-b border-[#eadfce]/80 bg-[#fbf6ec]/76 px-4 py-3 backdrop-blur-2xl md:px-8">
-      <div className="flex items-center justify-between">
+    <header className="sticky top-0 z-30 w-full border-b border-[#eadfce]/80 bg-[#fbf6ec]/76 px-0 py-3 backdrop-blur-2xl">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 md:px-8">
         <Link to="/" className="flex items-center gap-3">
           <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-[1.35rem] bg-[#fffaf1] shadow-lift ring-1 ring-[#eadfce]">
             <img src="/logo.jpeg" alt="Deals logo" className="h-full w-full object-cover" />
@@ -135,7 +135,12 @@ function Discover() {
     }),
     [filters, location]
   );
-  const dealsQuery = useInfiniteQuery(['deals', filtersWithLocation], fetchDeals, {
+
+  // Ensure default filters fetch all ads when no filters are applied
+  const defaultFilters = useMemo(() => ({ area: '', categoryId: '', sort: 'latest' }), []);
+  const activeFilters = Object.keys(filtersWithLocation).length ? filtersWithLocation : defaultFilters;
+
+  const dealsQuery = useInfiniteQuery(['deals', activeFilters], fetchDeals, {
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined)
   });
   const deals = dealsQuery.data?.pages.flatMap((page) => page.deals) || [];
@@ -215,13 +220,35 @@ function Discover() {
 }
 
 function DealCard({ deal, index }) {
-  const image = normalizeImage(deal.image_url) || fallbackImages[index % fallbackImages.length];
+  const images = deal.images || [normalizeImage(deal.image_url) || fallbackImages[index % fallbackImages.length]];
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [images.length]);
+
   const mapsUrl = deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`;
-  const redeem = useMutation(() => api.post(`/deals/${deal.id}/redeem`));
+  const { data: userData } = useQuery('me', async () => (await api.get('/me')).data);
+  const user = userData?.user;
+  const redeem = useMutation(() => api.post(`/deals/${deal.id}/redeem`), {
+    onSuccess: () => alert('Deal marked as redeemed!'),
+    onError: (error) => alert(`Failed to redeem: ${error.response?.data?.message || 'Unknown error'}`)
+  });
   return (
     <motion.article layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.035 }} className="deal-card">
       <div className="relative aspect-[1.35] overflow-hidden rounded-[1.35rem]">
-        <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
+        <img src={images[currentImageIndex]} alt="" loading="lazy" className="h-full w-full object-cover transition-opacity duration-500" />
+        {images.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1">
+            {images.map((_, i) => (
+              <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'}`} />
+            ))}
+          </div>
+        )}
         <div className="absolute inset-x-3 top-3 flex justify-between">
           <span className="chip">{deal.category_name}</span>
           {deal.is_best ? <span className="chip-dark"><Sparkles size={14} /> Best</span> : null}
@@ -246,9 +273,13 @@ function DealCard({ deal, index }) {
             <Navigation size={18} />
           </a>
         </div>
-        <button onClick={() => redeem.mutate()} className="wide-button small">
-          Mark as redeemed
-        </button>
+        {user ? (
+          <button onClick={() => redeem.mutate()} disabled={redeem.isLoading} className="wide-button small">
+            {redeem.isLoading ? 'Redeeming...' : 'Mark as redeemed'}
+          </button>
+        ) : (
+          <Link to="/auth" className="wide-button small">Sign in to redeem</Link>
+        )}
       </div>
     </motion.article>
   );
@@ -298,8 +329,14 @@ function OwnerStudio() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [shopForm, setShopForm] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
+  const formRef = useRef(null);
   const areaOptions = [['', 'Select area'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])];
   const shop = ownerDeals.data?.shop;
+
+  useEffect(() => {
+    if (showForm) formRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [showForm]);
 
   useEffect(() => {
     if (!shop) return;
@@ -315,12 +352,25 @@ function OwnerStudio() {
 
   const resetDealForm = () => {
     setForm(defaultDealForm());
+    setImageFiles([]);
     setEditingId(null);
     setShowForm(false);
   };
 
   const saveDeal = useMutation(
-    (payload) => editingId ? api.put(`/owner/deals/${editingId}`, payload) : api.post('/owner/deals', payload),
+    async (payload) => {
+      let imageUrls = [];
+      if (imageFiles.length > 0) {
+        const formData = new FormData();
+        imageFiles.forEach(file => formData.append('images', file));
+        const uploadResponse = await api.post('/uploads', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        imageUrls = uploadResponse.data.urls;
+      }
+      const dealPayload = { ...payload, imageUrls };
+      return editingId ? api.put(`/owner/deals/${editingId}`, dealPayload) : api.post('/owner/deals', dealPayload);
+    },
     {
       onSuccess: () => {
         resetDealForm();
@@ -356,6 +406,7 @@ function OwnerStudio() {
       googleMapsUrl: deal.google_maps_url || '',
       imageUrl: deal.image_url || ''
     });
+    setImageFiles([]);
     setShowForm(true);
   };
 
@@ -402,7 +453,7 @@ function OwnerStudio() {
         ) : null}
 
         {showForm ? (
-          <div className="liquid-panel p-5">
+          <div ref={formRef} className="liquid-panel p-5">
             <p className="eyebrow">{editingId ? 'Edit ad' : 'New ad'}</p>
             <h2 className="mt-1 text-2xl font-black">{editingId ? 'Update offer' : 'Post an ad'}</h2>
             <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); saveDeal.mutate(form); }}>
@@ -414,7 +465,32 @@ function OwnerStudio() {
               </div>
               <Select label="Category" value={form.categoryId} error={dealErrors.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={[['', 'Select category'], ...(categories?.categories || []).map((c) => [c.id, c.name])]} />
               <Input label="Google Maps URL" value={form.googleMapsUrl} error={dealErrors.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
-              <Input label="Product image URL" value={form.imageUrl} error={dealErrors.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+              <div>
+                <label className="field-label">Product images (max 5)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    if (files.length > 5) {
+                      alert('Maximum 5 images allowed');
+                      e.target.value = '';
+                      return;
+                    }
+                    setImageFiles(files);
+                  }}
+                  className="field-input"
+                />
+                {imageFiles.length > 0 && (
+                  <div className="mt-1 text-sm text-slate-500">
+                    Selected: {imageFiles.map(f => f.name).join(', ')}
+                  </div>
+                )}
+                {form.imageUrl && imageFiles.length === 0 && (
+                  <p className="mt-1 text-sm text-slate-500">Current image: {form.imageUrl}</p>
+                )}
+              </div>
               {saveDeal.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveDeal.error.response?.data?.message || 'Could not save ad.'}</p> : null}
               <div className="grid grid-cols-2 gap-2">
                 <button className="wide-button" disabled={saveDeal.isLoading}>{editingId ? 'Update ad' : 'Publish ad'}</button>
@@ -435,7 +511,7 @@ function OwnerStudio() {
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f4e7d2] text-[#b91f12]"><ShoppingBag size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
-              <span className="text-sm text-slate-500">{deal.status} · {deal.category_name} · {deal.coupon_code}</span>
+              <span className="text-sm text-slate-500">{deal.status === 'pending_approval' ? 'Pending approval' : deal.status} · {deal.category_name} · {deal.coupon_code}</span>
             </span>
             <div className="flex gap-2">
               <button className="icon-button" onClick={() => editDeal(deal)} title="Edit ad"><Settings2 size={17} /></button>
@@ -495,7 +571,7 @@ function AdminPanel() {
         <AdminMetric icon={Ticket} label="Deals" value={sumTotals(analytics.data?.dealStats)} />
         <AdminMetric icon={Gauge} label="Redeems" value={analytics.data?.redemptions || 0} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <AdminList title="Shop owner approvals" icon={ShieldCheck}>
           {(owners.data?.shopOwners || []).map((owner) => (
             <div key={owner.id} className="admin-row">
@@ -510,14 +586,28 @@ function AdminPanel() {
             </div>
           ))}
         </AdminList>
-        <AdminList title="Deal moderation" icon={BarChart3}>
-          {(deals.data?.deals || []).map((deal) => (
+        <AdminList title="Deal approvals" icon={BarChart3}>
+          {(deals.data?.deals || []).filter(deal => deal.status === 'pending_approval').map((deal) => (
             <div key={deal.id} className="admin-row">
               <div className="min-w-0">
                 <p className="truncate font-bold">{deal.title}</p>
-                <p className="truncate text-sm text-slate-500">{deal.shop_name} · {deal.status} · {deal.category_name}</p>
+                <p className="truncate text-sm text-slate-500">{deal.shop_name} · {deal.category_name}</p>
               </div>
-              <button className="icon-button" onClick={() => dealMutation.mutate({ id: deal.id, status: 'blocked' })}><Trash2 size={17} /></button>
+              <div className="flex gap-2">
+                <button className="icon-button" onClick={() => dealMutation.mutate({ id: deal.id, status: 'active' })} title="Approve"><BadgeCheck size={17} /></button>
+                <button className="icon-button" onClick={() => dealMutation.mutate({ id: deal.id, status: 'blocked' })} title="Deny"><Ban size={17} /></button>
+              </div>
+            </div>
+          ))}
+        </AdminList>
+        <AdminList title="All deals" icon={Ticket}>
+          {(deals.data?.deals || []).filter(deal => deal.status === 'active').slice(0, 10).map((deal) => (
+            <div key={deal.id} className="admin-row">
+              <div className="min-w-0">
+                <p className="truncate font-bold">{deal.title}</p>
+                <p className="truncate text-sm text-slate-500">{deal.shop_name} · {deal.category_name}</p>
+              </div>
+              <button className="icon-button" onClick={() => dealMutation.mutate({ id: deal.id, status: 'blocked' })} title="Delete"><Trash2 size={17} /></button>
             </div>
           ))}
         </AdminList>
@@ -552,6 +642,18 @@ function Auth({ compact = false }) {
           <button onClick={() => setMode('login')} className={`seg ${mode === 'login' ? 'active' : ''}`}>Login</button>
           <button onClick={() => setMode('register')} className={`seg ${mode === 'register' ? 'active' : ''}`}>Register</button>
         </div>
+        {mode === 'login' ? (
+          <div className="mt-3 flex gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="loginRole" value="user" checked={role === 'user'} onChange={(e) => setRole(e.target.value)} />
+              User
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="loginRole" value="admin" checked={role === 'admin'} onChange={(e) => setRole(e.target.value)} />
+              Admin
+            </label>
+          </div>
+        ) : null}
         <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); authMutation.mutate(); }}>
           {mode === 'register' ? <Input label="Name" value={form.name} error={authErrors.name} onChange={(name) => setForm({ ...form, name })} /> : null}
           <Input label="Email" type="email" value={form.email} error={authErrors.email} onChange={(email) => setForm({ ...form, email })} />
@@ -572,7 +674,6 @@ function Auth({ compact = false }) {
           ) : null}
           {authMutation.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{authMutation.error.response?.data?.message || 'Authentication failed.'}</p> : null}
           <button className="wide-button">{mode === 'login' ? 'Sign in' : 'Create account'}</button>
-          <p className="text-center text-xs text-slate-500">Admin seed: admin@deals.local. Change credentials before production.</p>
         </form>
       </div>
     </section>
@@ -590,7 +691,7 @@ function BottomNav() {
   ];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl px-4 pb-4 md:hidden">
-      <div className="grid grid-cols-2 gap-1 rounded-[1.65rem] border border-[#eadfce]/80 bg-[#fffaf1]/78 p-2 shadow-glass backdrop-blur-2xl">
+      <div className="grid grid-flow-col auto-cols-fr gap-1 rounded-[1.65rem] border border-[#eadfce]/80 bg-[#fffaf1]/78 p-2 shadow-glass backdrop-blur-2xl">
         {links.map(([to, Icon, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `bottom-tab ${isActive ? 'active' : ''}`}>
             <Icon size={20} />

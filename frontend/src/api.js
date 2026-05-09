@@ -7,7 +7,16 @@ export const api = axios.create({
 
 export const fetchDeals = async ({ pageParam = 1, queryKey }) => {
   const [, filters] = queryKey;
-  const { data } = await api.get('/deals', { params: { ...filters, page: pageParam, limit: 8 } });
+  const params = { ...filters, page: pageParam, limit: 8 };
+
+  // Remove undefined filters to fetch all ads by default
+  Object.keys(params).forEach((key) => {
+    if (params[key] === undefined || params[key] === '') {
+      delete params[key];
+    }
+  });
+
+  const { data } = await api.get('/deals', { params });
   return data;
 };
 

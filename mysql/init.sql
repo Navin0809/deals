@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS deals (
   google_maps_url TEXT,
   terms TEXT,
   image_url TEXT,
-  status ENUM('draft', 'active', 'expired', 'blocked') NOT NULL DEFAULT 'active',
+  status ENUM('draft', 'pending_approval', 'active', 'expired', 'blocked') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_deal_owner FOREIGN KEY (shop_owner_id) REFERENCES users(id) ON DELETE CASCADE,

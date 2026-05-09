@@ -9,7 +9,76 @@ Deals is a mobile-first hyperlocal coupon and in-store deal discovery platform. 
 - Database: MySQL 8 with relational tables for users, shop profiles, deals, categories, images, locations, and redemptions
 - Infrastructure: Docker Compose with separate frontend, backend, and MySQL containers
 
-## Run With Docker
+## Production Deployment
+
+### 1. Environment Setup
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your production values:
+
+```env
+# Database Configuration
+MYSQL_ROOT_PASSWORD=your-secure-root-password
+MYSQL_DATABASE=deals
+MYSQL_USER=deals_user
+MYSQL_PASSWORD=your-secure-db-password
+
+# JWT Secret (generate a long random string)
+JWT_SECRET=your-very-long-random-jwt-secret-here
+
+# Frontend Origin (your domain for production)
+FRONTEND_ORIGIN=https://yourdomain.com
+```
+
+### 2. Docker Deployment
+
+```bash
+# Build and start containers
+docker compose up --build -d
+
+# Check logs
+docker compose logs -f
+
+# Stop containers
+docker compose down
+```
+
+### 3. Nginx Reverse Proxy (Recommended)
+
+For production, use nginx as a reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 4. SSL Certificate
+
+Use Let's Encrypt for SSL:
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com
+```
+
+## Development Setup
+
+### Run With Docker
 
 ```bash
 docker compose up --build
@@ -26,7 +95,7 @@ Demo accounts:
 - Admin: `admin@deals.local` / `Admin@12345`
 - Shop owner: `owner@deals.local` / `Owner@12345`
 
-## Local Development
+### Local Development
 
 Backend:
 

@@ -3,3 +3,9 @@ dist/
 .env
 uploads/
 npm-debug.log*
+node_modules/
+.env
+
+mysql/data/
+uploads/
+*.log

@@ -46,7 +46,7 @@ const dealSchema = z.object({
   longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
   googleMapsUrl: z.string().url().optional().or(z.literal('')),
   terms: z.string().max(1200).optional().or(z.literal('')),
-  imageUrl: z.string().url().optional().or(z.literal(''))
+  imageUrls: z.array(z.string().url()).max(5).optional()
 });
 
 const categorySchema = z.object({
