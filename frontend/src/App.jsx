@@ -106,7 +106,7 @@ function TopBar() {
           </span>
         </Link>
         <div className="flex items-center gap-2">
-          <Link to={user ? (user.role === 'admin' ? '/admin' : '/owner') : '/auth'} className="glass-button">
+          <Link to={user ? (user.role === 'admin' ? '/admin' : user.role === 'shop_owner' ? '/owner' : '/') : '/auth'} className="glass-button">
             {user ? <UserRound size={18} /> : <Lock size={18} />}
             <span className="hidden sm:inline">{user?.name || 'Sign in'}</span>
           </Link>
@@ -538,7 +538,7 @@ function Auth({ compact = false }) {
     {
       onSuccess: () => {
         queryClient.invalidateQueries('me');
-        navigate(role === 'shop_owner' ? '/owner' : '/');
+        navigate('/');
       }
     }
   );
@@ -580,15 +580,17 @@ function Auth({ compact = false }) {
 }
 
 function BottomNav() {
+  const { data } = useQuery('me', async () => (await api.get('/me')).data);
+  const user = data?.user;
   const links = [
     ['/', Home, 'Home'],
     ['/map', Map, 'Map'],
-    ['/owner', Store, 'Owner'],
-    ['/admin', LayoutDashboard, 'Admin']
+    ...(user?.role === 'shop_owner' ? [['/owner', Store, 'Owner']] : []),
+    ...(user?.role === 'admin' ? [['/admin', LayoutDashboard, 'Admin']] : [])
   ];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl px-4 pb-4 md:hidden">
-      <div className="grid grid-cols-4 gap-1 rounded-[1.65rem] border border-[#eadfce]/80 bg-[#fffaf1]/78 p-2 shadow-glass backdrop-blur-2xl">
+      <div className="grid grid-cols-2 gap-1 rounded-[1.65rem] border border-[#eadfce]/80 bg-[#fffaf1]/78 p-2 shadow-glass backdrop-blur-2xl">
         {links.map(([to, Icon, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `bottom-tab ${isActive ? 'active' : ''}`}>
             <Icon size={20} />
