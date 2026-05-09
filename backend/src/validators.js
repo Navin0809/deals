@@ -1,17 +1,27 @@
 const { z } = require('zod');
 
+const optionalText = (schema) => z.preprocess(
+  (value) => (value === '' || value === null ? undefined : value),
+  schema.optional()
+);
+
+const optionalNumber = z.preprocess(
+  (value) => (value === '' || value === null ? undefined : value),
+  z.coerce.number().optional()
+);
+
 const registerSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email().max(180),
   password: z.string().min(8).max(120),
   role: z.enum(['user', 'shop_owner']).default('user'),
-  shopName: z.string().min(2).max(160).optional(),
-  ownerPhone: z.string().min(7).max(40).optional(),
-  address: z.string().min(5).max(255).optional(),
-  city: z.string().min(2).max(100).optional(),
-  latitude: z.coerce.number().min(-90).max(90).optional(),
-  longitude: z.coerce.number().min(-180).max(180).optional(),
-  googleMapsUrl: z.string().url().optional().or(z.literal(''))
+  shopName: optionalText(z.string().min(2).max(160)),
+  ownerPhone: optionalText(z.string().min(7).max(40)),
+  address: optionalText(z.string().min(5).max(255)),
+  city: optionalText(z.string().min(2).max(100)),
+  latitude: optionalNumber.pipe(z.number().min(-90).max(90).optional()),
+  longitude: optionalNumber.pipe(z.number().min(-180).max(180).optional()),
+  googleMapsUrl: optionalText(z.string().url())
 });
 
 const loginSchema = z.object({
