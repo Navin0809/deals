@@ -1,0 +1,523 @@
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  BadgeCheck,
+  Ban,
+  BarChart3,
+  CalendarClock,
+  ChevronRight,
+  Copy,
+  Gauge,
+  HeartPulse,
+  Home,
+  LayoutDashboard,
+  LocateFixed,
+  Lock,
+  Map,
+  MapPin,
+  Navigation,
+  Plus,
+  Search,
+  Settings2,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Store,
+  Tags,
+  Ticket,
+  Trash2,
+  UserRound
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from 'react-query';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { api, fetchDeals, normalizeImage } from './api';
+import { useUiStore } from './store';
+
+const fallbackImages = [
+  'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80'
+];
+
+function App() {
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_20%_0%,#e0f2fe_0,transparent_26%),radial-gradient(circle_at_90%_10%,#fce7f3_0,transparent_22%),#f8fafc] text-slate-950">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
+        <TopBar />
+        <main className="flex-1 px-4 pb-28 pt-3 md:px-8 md:pb-10">
+          <AnimatedRoutes />
+        </main>
+        <BottomNav />
+      </div>
+    </div>
+  );
+}
+
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 14, filter: 'blur(10px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+        exit={{ opacity: 0, y: -8, filter: 'blur(8px)' }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <Routes location={location}>
+          <Route path="/" element={<Discover />} />
+          <Route path="/map" element={<MapView />} />
+          <Route path="/owner" element={<OwnerStudio />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/auth" element={<Auth />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function TopBar() {
+  const { data } = useQuery('me', async () => (await api.get('/me')).data);
+  const user = data?.user;
+  return (
+    <header className="sticky top-0 z-30 border-b border-white/60 bg-white/70 px-4 py-3 backdrop-blur-2xl md:px-8">
+      <div className="flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-[1.35rem] bg-slate-950 text-white shadow-lift">
+            <Ticket size={22} />
+          </span>
+          <span>
+            <span className="block text-xl font-black tracking-tight">Deals</span>
+            <span className="block text-xs font-medium text-slate-500">Hyperlocal coupons</span>
+          </span>
+        </Link>
+        <Link to={user ? (user.role === 'admin' ? '/admin' : '/owner') : '/auth'} className="glass-button">
+          {user ? <UserRound size={18} /> : <Lock size={18} />}
+          <span className="hidden sm:inline">{user?.name || 'Sign in'}</span>
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+function Discover() {
+  const queryClient = useQueryClient();
+  const { filters, location, locationStatus, setFilter, setLocation, setLocationStatus } = useUiStore();
+  const { data: categoriesData } = useQuery('categories', async () => (await api.get('/categories')).data);
+  const filtersWithLocation = useMemo(
+    () => ({
+      ...filters,
+      lat: location?.latitude,
+      lng: location?.longitude,
+      best: filters.best ? 'true' : undefined
+    }),
+    [filters, location]
+  );
+  const dealsQuery = useInfiniteQuery(['deals', filtersWithLocation], fetchDeals, {
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined)
+  });
+  const deals = dealsQuery.data?.pages.flatMap((page) => page.deals) || [];
+
+  const requestLocation = () => {
+    setLocationStatus('loading');
+    navigator.geolocation?.getCurrentPosition(
+      (position) => {
+        setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        queryClient.invalidateQueries('deals');
+      },
+      () => setLocationStatus('denied'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="liquid-panel overflow-hidden p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">Live nearby</p>
+            <h1 className="mt-1 text-4xl font-black tracking-tight md:text-6xl">Find offers around you.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600 md:text-base">
+              Discover in-store coupons, copy the code, visit the shop, and redeem at the counter.
+            </p>
+          </div>
+          <motion.button whileTap={{ scale: 0.96 }} onClick={requestLocation} className="primary-icon">
+            <LocateFixed />
+          </motion.button>
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <Metric label="GPS" value={locationStatus === 'granted' ? 'On' : locationStatus === 'loading' ? '...' : 'Ask'} />
+          <Metric label="Radius" value={`${filters.radius} mi`} />
+          <Metric label="Deals" value={deals.length || '--'} />
+        </div>
+      </div>
+
+      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+        <FilterPill active={!filters.categoryId} onClick={() => setFilter('categoryId', '')}>All</FilterPill>
+        {categoriesData?.categories?.map((category) => (
+          <FilterPill key={category.id} active={String(filters.categoryId) === String(category.id)} onClick={() => setFilter('categoryId', category.id)}>
+            {category.name}
+          </FilterPill>
+        ))}
+      </div>
+
+      <div className="liquid-panel grid grid-cols-2 gap-3 p-3 md:grid-cols-4">
+        <Select label="Distance" value={filters.radius} onChange={(value) => setFilter('radius', value)} options={[5, 10, 15, 25, 50].map((x) => [`${x}`, `${x} miles`])} />
+        <Select label="Sort" value={filters.sort} onChange={(value) => setFilter('sort', value)} options={[['nearby', 'Nearby'], ['popular', 'Popularity'], ['expiring', 'Expiring'], ['latest', 'Latest']]} />
+        <button onClick={() => setFilter('best', !filters.best)} className={`filter-toggle ${filters.best ? 'is-on' : ''}`}>
+          <Sparkles size={17} /> Best offers
+        </button>
+        <Link to="/map" className="filter-toggle"><Map size={17} /> Map</Link>
+      </div>
+
+      {dealsQuery.isLoading ? <SkeletonGrid /> : deals.length ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {deals.map((deal, index) => <DealCard key={deal.id} deal={deal} index={index} />)}
+        </div>
+      ) : <EmptyState title="No nearby deals yet" text="Try a larger radius or check another category." />}
+
+      {dealsQuery.hasNextPage && (
+        <button onClick={() => dealsQuery.fetchNextPage()} className="wide-button">
+          Load more offers
+        </button>
+      )}
+    </section>
+  );
+}
+
+function DealCard({ deal, index }) {
+  const image = normalizeImage(deal.image_url) || fallbackImages[index % fallbackImages.length];
+  const mapsUrl = deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`;
+  const redeem = useMutation(() => api.post(`/deals/${deal.id}/redeem`));
+  return (
+    <motion.article layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.035 }} className="deal-card">
+      <div className="relative aspect-[1.35] overflow-hidden rounded-[1.35rem]">
+        <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
+        <div className="absolute inset-x-3 top-3 flex justify-between">
+          <span className="chip">{deal.category_name}</span>
+          {deal.is_best ? <span className="chip-dark"><Sparkles size={14} /> Best</span> : null}
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black leading-tight">{deal.title}</h2>
+            <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{deal.description}</p>
+          </div>
+          <span className="rounded-2xl bg-cyan-100 px-3 py-2 text-sm font-black text-cyan-900">{deal.discount_label || priceLabel(deal)}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <MapPin size={16} /> {deal.shop_name} · {deal.distance_miles ? `${Number(deal.distance_miles).toFixed(1)} mi` : deal.city}
+        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <button onClick={() => navigator.clipboard?.writeText(deal.coupon_code)} className="coupon-button">
+            <Copy size={16} /> {deal.coupon_code}
+          </button>
+          <a href={mapsUrl} target="_blank" rel="noreferrer" className="icon-button" aria-label="Navigate">
+            <Navigation size={18} />
+          </a>
+        </div>
+        <button onClick={() => redeem.mutate()} className="wide-button small">
+          Mark as redeemed
+        </button>
+      </div>
+    </motion.article>
+  );
+}
+
+function MapView() {
+  const { filters, location } = useUiStore();
+  const { data } = useInfiniteQuery(['deals', { ...filters, lat: location?.latitude, lng: location?.longitude }], fetchDeals, {
+    getNextPageParam: () => undefined
+  });
+  const deals = data?.pages.flatMap((page) => page.deals) || [];
+  const first = deals[0];
+  const mapSrc = first
+    ? `https://www.google.com/maps?q=${first.latitude},${first.longitude}&z=14&output=embed`
+    : 'https://www.google.com/maps?q=New%20York&z=12&output=embed';
+  return (
+    <section className="space-y-4">
+      <div className="liquid-panel overflow-hidden p-3">
+        <iframe title="Nearby deals map" src={mapSrc} loading="lazy" className="h-[58vh] w-full rounded-[1.35rem] border-0" />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {deals.slice(0, 6).map((deal) => (
+          <a key={deal.id} href={deal.google_maps_url || `https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`} target="_blank" rel="noreferrer" className="mini-row">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-slate-950 text-white"><MapPin size={18} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold">{deal.title}</span>
+              <span className="block truncate text-sm text-slate-500">{deal.shop_name}</span>
+            </span>
+            <ChevronRight size={18} />
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OwnerStudio() {
+  const { data: me } = useQuery('me', async () => (await api.get('/me')).data);
+  const { data: categories } = useQuery('categories', async () => (await api.get('/categories')).data);
+  const ownerDeals = useQuery('ownerDeals', async () => (await api.get('/owner/deals')).data, { enabled: me?.user?.role === 'shop_owner' });
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState(defaultDealForm());
+  const createDeal = useMutation((payload) => api.post('/owner/deals', payload), {
+    onSuccess: () => {
+      setForm(defaultDealForm());
+      queryClient.invalidateQueries('ownerDeals');
+      queryClient.invalidateQueries('deals');
+    }
+  });
+
+  if (!me?.user) return <Auth compact />;
+  if (me.user.role !== 'shop_owner') return <EmptyState title="Shop owner access" text="Create a shop owner account to post free monthly deals." />;
+  if (me.user.status !== 'active') return <EmptyState title="Approval pending" text="Admin approval is required before your offers go live." />;
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="liquid-panel p-5">
+        <p className="eyebrow">Owner studio</p>
+        <h1 className="mt-1 text-3xl font-black">Post a deal</h1>
+        <p className="mt-2 text-sm text-slate-500">{ownerDeals.data?.postedThisMonth || 0}/{ownerDeals.data?.monthlyLimit || 3} free posts used this month</p>
+        <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); createDeal.mutate(form); }}>
+          <Input label="Deal title" value={form.title} onChange={(title) => setForm({ ...form, title })} />
+          <Textarea label="Description" value={form.description} onChange={(description) => setForm({ ...form, description })} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Coupon code" value={form.couponCode} onChange={(couponCode) => setForm({ ...form, couponCode })} />
+            <Input label="Discount" value={form.discountLabel} onChange={(discountLabel) => setForm({ ...form, discountLabel })} />
+          </div>
+          <Select label="Category" value={form.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={(categories?.categories || []).map((c) => [c.id, c.name])} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Deal expiry" type="datetime-local" value={form.dealExpiresAt} onChange={(dealExpiresAt) => setForm({ ...form, dealExpiresAt })} />
+            <Input label="Coupon expiry" type="datetime-local" value={form.couponExpiresAt} onChange={(couponExpiresAt) => setForm({ ...form, couponExpiresAt })} />
+          </div>
+          <Input label="Shop timings" value={form.shopTimings} onChange={(shopTimings) => setForm({ ...form, shopTimings })} />
+          <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
+          <Input label="Product image URL" value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+          {createDeal.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{createDeal.error.response?.data?.message || 'Could not create deal.'}</p> : null}
+          <button className="wide-button" disabled={createDeal.isLoading}><Plus size={18} /> Publish offer</button>
+        </form>
+      </div>
+      <div className="space-y-3">
+        {(ownerDeals.data?.deals || []).map((deal) => (
+          <div key={deal.id} className="mini-row">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-100 text-cyan-900"><ShoppingBag size={18} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold">{deal.title}</span>
+              <span className="text-sm text-slate-500">{deal.status} · {deal.category_name}</span>
+            </span>
+            <span className="chip">{deal.coupon_code}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AdminPanel() {
+  const { data: me } = useQuery('me', async () => (await api.get('/me')).data);
+  const queryClient = useQueryClient();
+  const analytics = useQuery('adminAnalytics', async () => (await api.get('/admin/analytics')).data, { enabled: me?.user?.role === 'admin' });
+  const owners = useQuery('adminOwners', async () => (await api.get('/admin/shop-owners')).data, { enabled: me?.user?.role === 'admin' });
+  const deals = useQuery('adminDeals', async () => (await api.get('/admin/deals')).data, { enabled: me?.user?.role === 'admin' });
+  const statusMutation = useMutation(({ id, status }) => api.patch(`/admin/shop-owners/${id}/status`, { status }), {
+    onSuccess: () => queryClient.invalidateQueries('adminOwners')
+  });
+  const dealMutation = useMutation(({ id, status }) => api.patch(`/admin/deals/${id}/status`, { status }), {
+    onSuccess: () => queryClient.invalidateQueries('adminDeals')
+  });
+
+  if (me && me.user?.role !== 'admin') return <EmptyState title="Admin only" text="Sign in with an admin account to manage the platform." />;
+
+  return (
+    <section className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <AdminMetric icon={UserRound} label="Users" value={sumTotals(analytics.data?.users)} />
+        <AdminMetric icon={Store} label="Owners" value={analytics.data?.users?.filter((u) => u.role === 'shop_owner').reduce((a, b) => a + b.total, 0) || 0} />
+        <AdminMetric icon={Ticket} label="Deals" value={sumTotals(analytics.data?.dealStats)} />
+        <AdminMetric icon={Gauge} label="Redeems" value={analytics.data?.redemptions || 0} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AdminList title="Shop owner approvals" icon={ShieldCheck}>
+          {(owners.data?.shopOwners || []).map((owner) => (
+            <div key={owner.id} className="admin-row">
+              <div className="min-w-0">
+                <p className="truncate font-bold">{owner.shop_name}</p>
+                <p className="truncate text-sm text-slate-500">{owner.email} · {owner.status} · limit {owner.monthly_limit}</p>
+              </div>
+              <div className="flex gap-2">
+                <button className="icon-button" onClick={() => statusMutation.mutate({ id: owner.id, status: 'active' })}><BadgeCheck size={17} /></button>
+                <button className="icon-button" onClick={() => statusMutation.mutate({ id: owner.id, status: 'suspended' })}><Ban size={17} /></button>
+              </div>
+            </div>
+          ))}
+        </AdminList>
+        <AdminList title="Deal moderation" icon={BarChart3}>
+          {(deals.data?.deals || []).map((deal) => (
+            <div key={deal.id} className="admin-row">
+              <div className="min-w-0">
+                <p className="truncate font-bold">{deal.title}</p>
+                <p className="truncate text-sm text-slate-500">{deal.shop_name} · {deal.status} · {deal.category_name}</p>
+              </div>
+              <button className="icon-button" onClick={() => dealMutation.mutate({ id: deal.id, status: 'blocked' })}><Trash2 size={17} /></button>
+            </div>
+          ))}
+        </AdminList>
+      </div>
+    </section>
+  );
+}
+
+function Auth({ compact = false }) {
+  const [mode, setMode] = useState('login');
+  const [role, setRole] = useState('user');
+  const [form, setForm] = useState({ name: '', email: '', password: '', shopName: '', ownerPhone: '', address: '', city: '', latitude: '', longitude: '', googleMapsUrl: '' });
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const authMutation = useMutation(
+    () => api.post(mode === 'login' ? '/auth/login' : '/auth/register', mode === 'login' ? { email: form.email, password: form.password } : { ...form, role }),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('me');
+        navigate(role === 'shop_owner' ? '/owner' : '/');
+      }
+    }
+  );
+  const useGps = () => navigator.geolocation?.getCurrentPosition((pos) => setForm({ ...form, latitude: pos.coords.latitude, longitude: pos.coords.longitude }));
+
+  return (
+    <section className={`mx-auto max-w-xl ${compact ? '' : 'pt-6'}`}>
+      <div className="liquid-panel p-5">
+        <p className="eyebrow">Secure access</p>
+        <h1 className="mt-1 text-3xl font-black">{mode === 'login' ? 'Welcome back' : 'Create account'}</h1>
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-[1.25rem] bg-slate-100 p-1">
+          <button onClick={() => setMode('login')} className={`seg ${mode === 'login' ? 'active' : ''}`}>Login</button>
+          <button onClick={() => setMode('register')} className={`seg ${mode === 'register' ? 'active' : ''}`}>Register</button>
+        </div>
+        <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); authMutation.mutate(); }}>
+          {mode === 'register' ? <Input label="Name" value={form.name} onChange={(name) => setForm({ ...form, name })} /> : null}
+          <Input label="Email" type="email" value={form.email} onChange={(email) => setForm({ ...form, email })} />
+          <Input label="Password" type="password" value={form.password} onChange={(password) => setForm({ ...form, password })} />
+          {mode === 'register' ? (
+            <>
+              <Select label="Role" value={role} onChange={setRole} options={[['user', 'User'], ['shop_owner', 'Shop owner']]} />
+              {role === 'shop_owner' ? (
+                <>
+                  <Input label="Shop name" value={form.shopName} onChange={(shopName) => setForm({ ...form, shopName })} />
+                  <Input label="Phone" value={form.ownerPhone} onChange={(ownerPhone) => setForm({ ...form, ownerPhone })} />
+                  <Input label="Address" value={form.address} onChange={(address) => setForm({ ...form, address })} />
+                  <Input label="City" value={form.city} onChange={(city) => setForm({ ...form, city })} />
+                  <button type="button" onClick={useGps} className="filter-toggle"><LocateFixed size={17} /> Use shop GPS</button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Latitude" value={form.latitude} onChange={(latitude) => setForm({ ...form, latitude })} />
+                    <Input label="Longitude" value={form.longitude} onChange={(longitude) => setForm({ ...form, longitude })} />
+                  </div>
+                  <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
+                </>
+              ) : null}
+            </>
+          ) : null}
+          {authMutation.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{authMutation.error.response?.data?.message || 'Authentication failed.'}</p> : null}
+          <button className="wide-button">{mode === 'login' ? 'Sign in' : 'Create account'}</button>
+          <p className="text-center text-xs text-slate-500">Admin seed: admin@deals.local. Change credentials before production.</p>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function BottomNav() {
+  const links = [
+    ['/', Home, 'Home'],
+    ['/map', Map, 'Map'],
+    ['/owner', Store, 'Owner'],
+    ['/admin', LayoutDashboard, 'Admin']
+  ];
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl px-4 pb-4 md:hidden">
+      <div className="grid grid-cols-4 gap-1 rounded-[1.65rem] border border-white/70 bg-white/75 p-2 shadow-glass backdrop-blur-2xl">
+        {links.map(([to, Icon, label]) => (
+          <NavLink key={to} to={to} className={({ isActive }) => `bottom-tab ${isActive ? 'active' : ''}`}>
+            <Icon size={20} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function Metric({ label, value }) {
+  return <div className="rounded-[1.15rem] bg-white/70 p-3"><p className="text-xs font-bold uppercase text-slate-400">{label}</p><p className="mt-1 text-xl font-black">{value}</p></div>;
+}
+
+function FilterPill({ active, children, onClick }) {
+  return <button onClick={onClick} className={`pill ${active ? 'active' : ''}`}>{children}</button>;
+}
+
+function Select({ label, value, onChange, options }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function Input({ label, value, onChange, type = 'text' }) {
+  return <label className="field"><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function Textarea({ label, value, onChange }) {
+  return <label className="field"><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} rows="4" /></label>;
+}
+
+function EmptyState({ title, text }) {
+  return <div className="liquid-panel grid min-h-64 place-items-center p-8 text-center"><div><Sparkles className="mx-auto mb-3" /><h2 className="text-2xl font-black">{title}</h2><p className="mt-2 text-sm text-slate-500">{text}</p></div></div>;
+}
+
+function SkeletonGrid() {
+  return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-96 animate-pulse rounded-[1.8rem] bg-white/70" />)}</div>;
+}
+
+function AdminMetric({ icon: Icon, label, value }) {
+  return <div className="liquid-panel p-4"><Icon size={20} /><p className="mt-3 text-sm text-slate-500">{label}</p><p className="text-3xl font-black">{value}</p></div>;
+}
+
+function AdminList({ title, icon: Icon, children }) {
+  return <div className="liquid-panel p-4"><div className="mb-3 flex items-center gap-2 font-black"><Icon size={18} />{title}</div><div className="space-y-2">{children}</div></div>;
+}
+
+function priceLabel(deal) {
+  if (deal.regular_price && deal.deal_price) return `${Math.round((1 - deal.deal_price / deal.regular_price) * 100)}% off`;
+  return 'Offer';
+}
+
+function sumTotals(rows = []) {
+  return rows.reduce((total, row) => total + Number(row.total || 0), 0);
+}
+
+function defaultDealForm() {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+  return {
+    title: '',
+    description: '',
+    couponCode: '',
+    categoryId: '',
+    discountLabel: '',
+    regularPrice: '',
+    dealPrice: '',
+    isBest: false,
+    dealExpiresAt: tomorrow,
+    couponExpiresAt: tomorrow,
+    shopTimings: '',
+    googleMapsUrl: '',
+    imageUrl: ''
+  };
+}
+
+export default App;
