@@ -12,7 +12,7 @@ const path = require('path');
 const { pool, query } = require('./db');
 const { authenticate, cookieName, publicUser, requireAuth, requireRole, signToken } = require('./auth');
 const { findArea, hyderabadAreas, parseCoordinatesFromMapsUrl, resolveShopLocation } = require('./areas');
-const { categorySchema, dealSchema, limitSchema, loginSchema, registerSchema, validate } = require('./validators');
+const { categorySchema, dealSchema, limitSchema, loginSchema, registerSchema, shopProfileSchema, validate } = require('./validators');
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -185,7 +185,7 @@ app.post('/api/uploads', requireAuth, upload.single('image'), (req, res) => {
 
 app.get('/api/deals', asyncHandler(async (req, res) => {
   const { categoryId, city, area, lat, lng, best, sort = 'latest', page = 1, limit = 12 } = req.query;
-  const conditions = ['d.status = "active"', 'd.deal_expires_at > NOW()', 'd.coupon_expires_at > NOW()', 'u.status = "active"'];
+  const conditions = ['d.status = "active"', 'd.deal_expires_at > NOW()', '(d.coupon_expires_at IS NULL OR d.coupon_expires_at > NOW())', 'u.status = "active"'];
   const params = [];
   const pageSize = Math.min(Number(limit) || 12, 30);
   const offset = (Math.max(Number(page) || 1, 1) - 1) * pageSize;
@@ -266,8 +266,31 @@ app.get('/api/owner/deals', requireRole('shop_owner'), asyncHandler(async (req, 
         AND MONTH(created_at) = MONTH(CURRENT_DATE())`,
     [req.user.id]
   );
-  const [{ monthly_limit: ownerLimit }] = await query('SELECT monthly_limit FROM shop_profiles WHERE user_id = ?', [req.user.id]);
-  res.json({ deals: rows, postedThisMonth, monthlyLimit: ownerLimit ?? monthlyDealLimit });
+  const [shop] = await query('SELECT shop_name, owner_phone, address, city, area, latitude, longitude, google_maps_url, timings, monthly_limit FROM shop_profiles WHERE user_id = ?', [req.user.id]);
+  res.json({ deals: rows, shop, postedThisMonth, monthlyLimit: shop?.monthly_limit ?? monthlyDealLimit });
+}));
+
+app.patch('/api/owner/shop', requireRole('shop_owner'), validate(shopProfileSchema), asyncHandler(async (req, res) => {
+  const data = req.body;
+  const location = resolveShopLocation({ area: data.area, googleMapsUrl: data.googleMapsUrl });
+  await query(
+    `UPDATE shop_profiles
+        SET shop_name = ?, owner_phone = ?, address = ?, city = 'Hyderabad', area = ?,
+            latitude = ?, longitude = ?, google_maps_url = ?, timings = ?
+      WHERE user_id = ?`,
+    [
+      data.shopName,
+      data.ownerPhone,
+      data.address,
+      data.area,
+      location.latitude,
+      location.longitude,
+      data.googleMapsUrl || null,
+      data.timings || null,
+      req.user.id
+    ]
+  );
+  res.json({ ok: true });
 }));
 
 app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), asyncHandler(async (req, res) => {
@@ -307,7 +330,7 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
       data.dealPrice ?? null,
       data.isBest,
       toMysqlDate(data.dealExpiresAt),
-      toMysqlDate(data.couponExpiresAt),
+      toMysqlDate(data.couponExpiresAt || data.dealExpiresAt),
       data.shopTimings || null,
       dealLocation.latitude,
       dealLocation.longitude,
@@ -317,6 +340,51 @@ app.post('/api/owner/deals', requireRole('shop_owner'), validate(dealSchema), as
     ]
   );
   res.status(201).json({ id: result.insertId });
+}));
+
+app.put('/api/owner/deals/:id', requireRole('shop_owner'), validate(dealSchema), asyncHandler(async (req, res) => {
+  const data = req.body;
+  const [shop] = await query('SELECT latitude, longitude, google_maps_url FROM shop_profiles WHERE user_id = ?', [req.user.id]);
+  const dealLocation = parseCoordinatesFromMapsUrl(data.googleMapsUrl) || {
+    latitude: data.latitude ?? shop.latitude,
+    longitude: data.longitude ?? shop.longitude
+  };
+  const result = await query(
+    `UPDATE deals
+        SET category_id = ?, title = ?, description = ?, coupon_code = ?, discount_label = ?,
+            regular_price = ?, deal_price = ?, is_best = ?, deal_expires_at = ?,
+            coupon_expires_at = ?, shop_timings = ?, latitude = ?, longitude = ?,
+            google_maps_url = ?, terms = ?, image_url = ?, status = 'active'
+      WHERE id = ? AND shop_owner_id = ?`,
+    [
+      data.categoryId,
+      data.title,
+      data.description,
+      data.couponCode,
+      data.discountLabel || null,
+      data.regularPrice ?? null,
+      data.dealPrice ?? null,
+      data.isBest,
+      toMysqlDate(data.dealExpiresAt),
+      toMysqlDate(data.couponExpiresAt || data.dealExpiresAt),
+      data.shopTimings || null,
+      dealLocation.latitude,
+      dealLocation.longitude,
+      data.googleMapsUrl || shop.google_maps_url || null,
+      data.terms || null,
+      data.imageUrl || null,
+      req.params.id,
+      req.user.id
+    ]
+  );
+  if (!result.affectedRows) return res.status(404).json({ message: 'Deal not found.' });
+  res.json({ ok: true });
+}));
+
+app.delete('/api/owner/deals/:id', requireRole('shop_owner'), asyncHandler(async (req, res) => {
+  const result = await query('DELETE FROM deals WHERE id = ? AND shop_owner_id = ?', [req.params.id, req.user.id]);
+  if (!result.affectedRows) return res.status(404).json({ message: 'Deal not found.' });
+  res.json({ ok: true });
 }));
 
 app.patch('/api/owner/deals/:id/status', requireRole('shop_owner'), asyncHandler(async (req, res) => {

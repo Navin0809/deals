@@ -40,7 +40,7 @@ const dealSchema = z.object({
   dealPrice: z.coerce.number().nonnegative().optional().nullable(),
   isBest: z.coerce.boolean().default(false),
   dealExpiresAt: z.coerce.date(),
-  couponExpiresAt: z.coerce.date(),
+  couponExpiresAt: optionalText(z.coerce.date()),
   shopTimings: z.string().max(180).optional().or(z.literal('')),
   latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
   longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
@@ -58,6 +58,15 @@ const limitSchema = z.object({
   monthlyLimit: z.coerce.number().int().min(0).max(100)
 });
 
+const shopProfileSchema = z.object({
+  shopName: z.string().min(2).max(160),
+  ownerPhone: z.string().min(7).max(40),
+  address: z.string().min(5).max(255),
+  area: z.string().min(2).max(100),
+  googleMapsUrl: optionalText(z.string().url()),
+  timings: optionalText(z.string().max(180))
+});
+
 function validate(schema) {
   return (req, res, next) => {
     const parsed = schema.safeParse(req.body);
@@ -72,4 +81,4 @@ function validate(schema) {
   };
 }
 
-module.exports = { categorySchema, dealSchema, limitSchema, loginSchema, registerSchema, validate };
+module.exports = { categorySchema, dealSchema, limitSchema, loginSchema, registerSchema, shopProfileSchema, validate };

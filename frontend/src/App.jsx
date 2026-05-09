@@ -28,7 +28,7 @@ import {
   Trash2,
   UserRound
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from 'react-query';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api, fetchDeals, normalizeImage } from './api';
@@ -291,16 +291,75 @@ function MapView() {
 function OwnerStudio() {
   const { data: me } = useQuery('me', async () => (await api.get('/me')).data);
   const { data: categories } = useQuery('categories', async () => (await api.get('/categories')).data);
+  const { data: areasData } = useQuery('areas', async () => (await api.get('/locations/areas')).data);
   const ownerDeals = useQuery('ownerDeals', async () => (await api.get('/owner/deals')).data, { enabled: me?.user?.role === 'shop_owner' });
   const queryClient = useQueryClient();
   const [form, setForm] = useState(defaultDealForm());
-  const createDeal = useMutation((payload) => api.post('/owner/deals', payload), {
+  const [editingId, setEditingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [shopForm, setShopForm] = useState(null);
+  const areaOptions = [['', 'Select area'], ...(areasData?.areas || []).filter((area) => area.name !== 'All Hyderabad').map((area) => [area.name, area.name])];
+  const shop = ownerDeals.data?.shop;
+
+  useEffect(() => {
+    if (!shop) return;
+    setShopForm({
+      shopName: shop.shop_name || '',
+      ownerPhone: shop.owner_phone || '',
+      address: shop.address || '',
+      area: shop.area || '',
+      googleMapsUrl: shop.google_maps_url || '',
+      timings: shop.timings || ''
+    });
+  }, [shop?.shop_name, shop?.owner_phone, shop?.address, shop?.area, shop?.google_maps_url, shop?.timings]);
+
+  const resetDealForm = () => {
+    setForm(defaultDealForm());
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const saveDeal = useMutation(
+    (payload) => editingId ? api.put(`/owner/deals/${editingId}`, payload) : api.post('/owner/deals', payload),
+    {
+      onSuccess: () => {
+        resetDealForm();
+        queryClient.invalidateQueries('ownerDeals');
+        queryClient.invalidateQueries('deals');
+      }
+    }
+  );
+  const deleteDeal = useMutation((id) => api.delete(`/owner/deals/${id}`), {
     onSuccess: () => {
-      setForm(defaultDealForm());
       queryClient.invalidateQueries('ownerDeals');
       queryClient.invalidateQueries('deals');
     }
   });
+  const saveShop = useMutation((payload) => api.patch('/owner/shop', payload), {
+    onSuccess: () => {
+      queryClient.invalidateQueries('ownerDeals');
+      queryClient.invalidateQueries('deals');
+    }
+  });
+
+  const editDeal = (deal) => {
+    setEditingId(deal.id);
+    setForm({
+      title: deal.title || '',
+      description: deal.description || '',
+      couponCode: deal.coupon_code || '',
+      categoryId: deal.category_id || '',
+      discountLabel: deal.discount_label || '',
+      regularPrice: deal.regular_price || '',
+      dealPrice: deal.deal_price || '',
+      isBest: Boolean(deal.is_best),
+      dealExpiresAt: toDateTimeLocal(deal.deal_expires_at),
+      shopTimings: deal.shop_timings || '',
+      googleMapsUrl: deal.google_maps_url || '',
+      imageUrl: deal.image_url || ''
+    });
+    setShowForm(true);
+  };
 
   if (!me?.user) return <Auth compact />;
   if (me.user.role !== 'shop_owner') return <EmptyState title="Shop owner access" text="Create a shop owner account to post free monthly deals." />;
@@ -308,45 +367,89 @@ function OwnerStudio() {
 
   return (
     <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-      <div className="liquid-panel p-5">
-        <p className="eyebrow">Owner studio</p>
-        <h1 className="mt-1 text-3xl font-black">Post a deal</h1>
-        <p className="mt-2 text-sm text-slate-500">{ownerDeals.data?.postedThisMonth || 0}/{ownerDeals.data?.monthlyLimit || 3} free posts used this month</p>
-        <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); createDeal.mutate(form); }}>
-          <Input label="Deal title" value={form.title} onChange={(title) => setForm({ ...form, title })} />
-          <Textarea label="Description" value={form.description} onChange={(description) => setForm({ ...form, description })} />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Coupon code" value={form.couponCode} onChange={(couponCode) => setForm({ ...form, couponCode })} />
-            <Input label="Discount" value={form.discountLabel} onChange={(discountLabel) => setForm({ ...form, discountLabel })} />
+      <div className="space-y-4">
+        <div className="liquid-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="eyebrow">Owner studio</p>
+              <h1 className="mt-1 text-3xl font-black">Your ads</h1>
+              <p className="mt-2 text-sm text-slate-500">{ownerDeals.data?.postedThisMonth || 0}/{ownerDeals.data?.monthlyLimit || 3} free posts used this month</p>
+            </div>
+            <button onClick={() => { setEditingId(null); setForm(defaultDealForm()); setShowForm(!showForm); }} className="primary-icon" title="Post an ad">
+              <Plus />
+            </button>
           </div>
-          <Select label="Category" value={form.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={(categories?.categories || []).map((c) => [c.id, c.name])} />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Deal expiry" type="datetime-local" value={form.dealExpiresAt} onChange={(dealExpiresAt) => setForm({ ...form, dealExpiresAt })} />
-            <Input label="Coupon expiry" type="datetime-local" value={form.couponExpiresAt} onChange={(couponExpiresAt) => setForm({ ...form, couponExpiresAt })} />
+          <button onClick={() => { setEditingId(null); setForm(defaultDealForm()); setShowForm(true); }} className="wide-button mt-5">
+            <Plus size={18} /> Post an ad
+          </button>
+        </div>
+
+        {shopForm ? (
+          <div className="liquid-panel p-5">
+            <p className="eyebrow">Shop location</p>
+            <h2 className="mt-1 text-2xl font-black">Where customers visit</h2>
+            <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); saveShop.mutate(shopForm); }}>
+              <Input label="Shop name" value={shopForm.shopName} onChange={(shopName) => setShopForm({ ...shopForm, shopName })} />
+              <Input label="Phone" value={shopForm.ownerPhone} onChange={(ownerPhone) => setShopForm({ ...shopForm, ownerPhone })} />
+              <Input label="Address" value={shopForm.address} onChange={(address) => setShopForm({ ...shopForm, address })} />
+              <Select label="Hyderabad area" value={shopForm.area} onChange={(area) => setShopForm({ ...shopForm, area })} options={areaOptions} />
+              <Input label="Google Maps URL" value={shopForm.googleMapsUrl} onChange={(googleMapsUrl) => setShopForm({ ...shopForm, googleMapsUrl })} />
+              <Input label="Shop timings" value={shopForm.timings} onChange={(timings) => setShopForm({ ...shopForm, timings })} />
+              {saveShop.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveShop.error.response?.data?.message || 'Could not save shop location.'}</p> : null}
+              <button className="wide-button" disabled={saveShop.isLoading}>Save shop location</button>
+            </form>
           </div>
-          <Input label="Shop timings" value={form.shopTimings} onChange={(shopTimings) => setForm({ ...form, shopTimings })} />
-          <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
-          <Input label="Product image URL" value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
-          {createDeal.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{createDeal.error.response?.data?.message || 'Could not create deal.'}</p> : null}
-          <button className="wide-button" disabled={createDeal.isLoading}><Plus size={18} /> Publish offer</button>
-        </form>
+        ) : null}
+
+        {showForm ? (
+          <div className="liquid-panel p-5">
+            <p className="eyebrow">{editingId ? 'Edit ad' : 'New ad'}</p>
+            <h2 className="mt-1 text-2xl font-black">{editingId ? 'Update offer' : 'Post an ad'}</h2>
+            <form className="mt-5 grid gap-3" onSubmit={(event) => { event.preventDefault(); saveDeal.mutate(form); }}>
+              <Input label="Deal title" value={form.title} onChange={(title) => setForm({ ...form, title })} />
+              <Textarea label="Description" value={form.description} onChange={(description) => setForm({ ...form, description })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Coupon code" value={form.couponCode} onChange={(couponCode) => setForm({ ...form, couponCode })} />
+                <Input label="Discount" value={form.discountLabel} onChange={(discountLabel) => setForm({ ...form, discountLabel })} />
+              </div>
+              <Select label="Category" value={form.categoryId} onChange={(categoryId) => setForm({ ...form, categoryId })} options={[['', 'Select category'], ...(categories?.categories || []).map((c) => [c.id, c.name])]} />
+              <Input label="Deal expiry" type="datetime-local" value={form.dealExpiresAt} onChange={(dealExpiresAt) => setForm({ ...form, dealExpiresAt })} />
+              <Input label="Shop timings" value={form.shopTimings} onChange={(shopTimings) => setForm({ ...form, shopTimings })} />
+              <Input label="Google Maps URL" value={form.googleMapsUrl} onChange={(googleMapsUrl) => setForm({ ...form, googleMapsUrl })} />
+              <Input label="Product image URL" value={form.imageUrl} onChange={(imageUrl) => setForm({ ...form, imageUrl })} />
+              {saveDeal.error ? <p className="rounded-2xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{saveDeal.error.response?.data?.message || 'Could not save ad.'}</p> : null}
+              <div className="grid grid-cols-2 gap-2">
+                <button className="wide-button" disabled={saveDeal.isLoading}>{editingId ? 'Update ad' : 'Publish ad'}</button>
+                <button type="button" onClick={resetDealForm} className="filter-toggle">Cancel</button>
+              </div>
+            </form>
+          </div>
+        ) : null}
       </div>
+
       <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xl font-black">All posted ads</h2>
+          <span className="chip">{ownerDeals.data?.deals?.length || 0}</span>
+        </div>
         {(ownerDeals.data?.deals || []).map((deal) => (
           <div key={deal.id} className="mini-row">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f4e7d2] text-[#b91f12]"><ShoppingBag size={18} /></span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{deal.title}</span>
-              <span className="text-sm text-slate-500">{deal.status} · {deal.category_name}</span>
+              <span className="text-sm text-slate-500">{deal.status} · {deal.category_name} · {deal.coupon_code}</span>
             </span>
-            <span className="chip">{deal.coupon_code}</span>
+            <div className="flex gap-2">
+              <button className="icon-button" onClick={() => editDeal(deal)} title="Edit ad"><Settings2 size={17} /></button>
+              <button className="icon-button" onClick={() => deleteDeal.mutate(deal.id)} title="Delete ad"><Trash2 size={17} /></button>
+            </div>
           </div>
         ))}
+        {!ownerDeals.isLoading && !ownerDeals.data?.deals?.length ? <EmptyState title="No ads posted" text="Tap Post an ad to publish your first offer." /> : null}
       </div>
     </section>
   );
 }
-
 function PendingApproval() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -562,11 +665,17 @@ function defaultDealForm() {
     dealPrice: '',
     isBest: false,
     dealExpiresAt: tomorrow,
-    couponExpiresAt: tomorrow,
     shopTimings: '',
     googleMapsUrl: '',
     imageUrl: ''
   };
+}
+
+function toDateTimeLocal(value) {
+  if (!value) return new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+  return date.toISOString().slice(0, 16);
 }
 
 export default App;
